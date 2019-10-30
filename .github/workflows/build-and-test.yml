@@ -8,7 +8,6 @@ jobs:
         image: redis
         ports:
         - 6379/tcp
-        options: --entrypoint redis-server
     steps:
       - uses: actions/checkout@v1
       - name: install-beta
