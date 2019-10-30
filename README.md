@@ -5,6 +5,9 @@
 An implementation of the [redis protocol specification][redis] with an execution helper using the
 [`TcpStream`][tcp-stream] provided by [async-std].
 
+
+For a list of supported commands see [todo.md](/.todo.md).
+
 ## Contributing
 
 See [CONTRIBUTING](/CONTRIBUTING.md).
