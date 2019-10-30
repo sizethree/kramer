@@ -1,4 +1,4 @@
-name: gh.build-and-test
+name: gh.build
 on: [push]
 jobs:
   build:
