@@ -1,3 +1,36 @@
+//! An implementation of the [redis protocol specification][redis] with an execution helper using
+//! the [`TcpStream`][tcp-stream] provided by [async-std].
+//!
+//! ## Example
+//!
+//! ```
+//! use kramer::{Command, send};
+//! use std::env::{var};
+//!
+//! fn get_redis_url() -> String {
+//!   let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
+//!   let port = var("REDIS_PORT").unwrap_or(String::from("6379"));
+//!   format!("{}:{}", host, port)
+//! }
+//!
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!   let url = get_redis_url();
+//!   let cmd = Command::Keys("*");
+//!
+//!   async_std::task::block_on(async {
+//!     match send(url.as_str(), cmd).await {
+//!       Ok(keys) => println!("keys is a response: {:?}", keys),
+//!       Err(e) => println!("unable to send: {:?}", e),
+//!     }
+//!   });
+//!
+//!   Ok(())
+//! }
+//! ```
+//!
+//! [redis]: https://redis.io/topics/protocol
+//! [async-std]: https://github.com/async-rs/async-std
+//! [tcp-stream]: https://docs.rs/async-std/0.99.11/async_std/net/struct.TcpStream.html
 extern crate async_std;
 
 use async_std::net::TcpStream;
@@ -508,191 +541,5 @@ mod fmt_tests {
       format!("{}", Command::List(ListCommand::Rem("seinfeld", "kramer", 1))),
       "*4\r\n$4\r\nLREM\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$1\r\n1\r\n"
     );
-  }
-}
-
-#[cfg(test)]
-mod send_tests {
-  use super::{send, Arity, Command, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
-  use std::env::var;
-
-  fn get_redis_url() -> String {
-    let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
-    let port = var("REDIS_PORT").unwrap_or(String::from("6379"));
-    format!("{}:{}", host, port)
-  }
-
-  #[test]
-  fn test_send_keys() {
-    let url = get_redis_url();
-    let result = async_std::task::block_on(send(url.as_str(), Command::Keys("*")));
-    assert!(result.is_ok());
-  }
-
-  #[test]
-  fn test_set_vanilla() {
-    let url = get_redis_url();
-    let key = "test_set_vanilla";
-    let result = async_std::task::block_on(async {
-      let set_result = send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-    assert_eq!(
-      result.unwrap(),
-      Response::Item(ResponseValue::String(String::from("OK")))
-    )
-  }
-
-  #[test]
-  fn test_set_if_not_exists_w_not_exists() {
-    let key = "test_set_if_not_exists_w_not_exists";
-    let url = get_redis_url();
-    let result = async_std::task::block_on(async {
-      let set_result = send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::IfNotExists)),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-    assert_eq!(
-      result.unwrap(),
-      Response::Item(ResponseValue::String(String::from("OK")))
-    );
-  }
-
-  #[test]
-  fn test_set_if_not_exists_w_exists() {
-    let key = "test_set_if_not_exists_w_exists";
-    let url = get_redis_url();
-
-    let result = async_std::task::block_on(async {
-      send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
-      )
-      .await?;
-      let set_result = send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(key, "jerry", None, Insertion::IfNotExists)),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-    assert_eq!(result.unwrap(), Response::Item(ResponseValue::Empty));
-  }
-
-  #[test]
-  fn test_set_if_exists_w_not_exists() {
-    let key = "test_set_if_exists_w_not_exists";
-    let url = get_redis_url();
-
-    let result = async_std::task::block_on(async {
-      let set_result = send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::IfExists)),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-    assert_eq!(result.unwrap(), Response::Item(ResponseValue::Empty));
-  }
-
-  #[test]
-  fn test_set_if_exists_w_exists() {
-    let key = "test_set_if_exists_w_exists";
-    let url = get_redis_url();
-    let result = async_std::task::block_on(async {
-      send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
-      )
-      .await?;
-      let set_result = send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(key, "jerry", None, Insertion::IfExists)),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-    assert_eq!(
-      result.unwrap(),
-      Response::Item(ResponseValue::String(String::from("OK")))
-    );
-  }
-
-  #[test]
-  fn test_set_with_duration() {
-    let (key, url) = ("test_set_duration", get_redis_url());
-
-    let result = async_std::task::block_on(async {
-      let set_result = send(
-        url.as_str(),
-        Command::Strings(StringCommand::Set(
-          key,
-          "kramer",
-          Some(std::time::Duration::new(10, 0)),
-          Insertion::Always,
-        )),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-    assert_eq!(
-      result.unwrap(),
-      Response::Item(ResponseValue::String(String::from("OK")))
-    )
-  }
-
-  #[test]
-  fn test_rpush_single() {
-    let (key, url) = ("test_rpush_single", get_redis_url());
-
-    let result = async_std::task::block_on(async {
-      let set_result = send(
-        url.as_str(),
-        Command::List(ListCommand::Push(
-          (Side::Right, Insertion::Always),
-          key,
-          Arity::One("kramer"),
-        )),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-
-    assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
-  }
-
-  #[test]
-  fn test_rpush_multiple() {
-    let (key, url) = ("test_rpush_many", get_redis_url());
-
-    let result = async_std::task::block_on(async {
-      let set_result = send(
-        url.as_str(),
-        Command::List(ListCommand::Push(
-          (Side::Right, Insertion::Always),
-          key,
-          Arity::Many(vec!["kramer", "jerry"]),
-        )),
-      )
-      .await;
-      send(url.as_str(), Command::Del(Arity::One(key))).await?;
-      set_result
-    });
-
-    assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
   }
 }
