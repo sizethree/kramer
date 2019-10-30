@@ -1,5 +1,7 @@
 ## kramer
 
+[![ci.img]][ci.url] [![docs.img]][docs.url]
+
 An implementation of the [redis protocol specification][redis] with an execution helper using the
 [`TcpStream`][tcp-stream] provided by [async-std].
 
@@ -12,3 +14,5 @@ See [CONTRIBUTING](/CONTRIBUTING.md).
 [redis]: https://redis.io/topics/protocol
 [async-std]: https://github.com/async-rs/async-std
 [tcp-stream]: https://docs.rs/async-std/0.99.11/async_std/net/struct.TcpStream.html
+[docs.img]: https://docs.rs/kramer/badge.svg
+[docs.url]: https://docs.rs/kramer
