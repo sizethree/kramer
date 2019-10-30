@@ -292,8 +292,8 @@ pub async fn send<S: std::fmt::Display>(addr: &str, message: Command<S>) -> Resu
 }
 
 #[cfg(test)]
-mod tests {
-  use super::{send, Arity, Command, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
+mod fmt_tests {
+  use super::{Arity, Command, Insertion, ListCommand, Side, StringCommand};
 
   #[test]
   fn test_command_keys_fmt() {
@@ -476,23 +476,37 @@ mod tests {
       "*4\r\n$4\r\nLREM\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$1\r\n1\r\n"
     );
   }
+}
+
+#[cfg(test)]
+mod send_tests {
+  use super::{send, Arity, Command, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
+  use std::env::var;
+
+  fn get_redis_url() -> String {
+    let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
+    let port = var("REDIS_PORT").unwrap_or(String::from("6379"));
+    format!("{}:{}", host, port)
+  }
 
   #[test]
   fn test_send_keys() {
-    let result = async_std::task::block_on(send("0.0.0.0:6379", Command::Keys("*")));
+    let url = get_redis_url();
+    let result = async_std::task::block_on(send(url.as_str(), Command::Keys("*")));
     assert!(result.is_ok());
   }
 
   #[test]
   fn test_set_vanilla() {
+    let url = get_redis_url();
     let key = "test_set_vanilla";
     let result = async_std::task::block_on(async {
       let set_result = send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
       )
       .await;
-      send("0.0.0.0:6379", Command::Del(Arity::One(key))).await?;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
       set_result
     });
     assert_eq!(
@@ -504,13 +518,14 @@ mod tests {
   #[test]
   fn test_set_if_not_exists_w_not_exists() {
     let key = "test_set_if_not_exists_w_not_exists";
+    let url = get_redis_url();
     let result = async_std::task::block_on(async {
       let set_result = send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::IfNotExists)),
       )
       .await;
-      send("0.0.0.0:6379", Command::Del(Arity::One(key))).await?;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
       set_result
     });
     assert_eq!(
@@ -522,18 +537,20 @@ mod tests {
   #[test]
   fn test_set_if_not_exists_w_exists() {
     let key = "test_set_if_not_exists_w_exists";
+    let url = get_redis_url();
+
     let result = async_std::task::block_on(async {
       send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
       )
       .await?;
       let set_result = send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(key, "jerry", None, Insertion::IfNotExists)),
       )
       .await;
-      send("0.0.0.0:6379", Command::Del(Arity::One(key))).await?;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
       set_result
     });
     assert_eq!(result.unwrap(), Response::Item(ResponseValue::Empty));
@@ -542,13 +559,15 @@ mod tests {
   #[test]
   fn test_set_if_exists_w_not_exists() {
     let key = "test_set_if_exists_w_not_exists";
+    let url = get_redis_url();
+
     let result = async_std::task::block_on(async {
       let set_result = send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::IfExists)),
       )
       .await;
-      send("0.0.0.0:6379", Command::Del(Arity::One(key))).await?;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
       set_result
     });
     assert_eq!(result.unwrap(), Response::Item(ResponseValue::Empty));
@@ -557,18 +576,19 @@ mod tests {
   #[test]
   fn test_set_if_exists_w_exists() {
     let key = "test_set_if_exists_w_exists";
+    let url = get_redis_url();
     let result = async_std::task::block_on(async {
       send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
       )
       .await?;
       let set_result = send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(key, "jerry", None, Insertion::IfExists)),
       )
       .await;
-      send("0.0.0.0:6379", Command::Del(Arity::One(key))).await?;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
       set_result
     });
     assert_eq!(
@@ -579,10 +599,11 @@ mod tests {
 
   #[test]
   fn test_set_with_duration() {
-    let key = "test_set_duration";
+    let (key, url) = ("test_set_duration", get_redis_url());
+
     let result = async_std::task::block_on(async {
       let set_result = send(
-        "0.0.0.0:6379",
+        url.as_str(),
         Command::Strings(StringCommand::Set(
           key,
           "kramer",
@@ -591,7 +612,7 @@ mod tests {
         )),
       )
       .await;
-      send("0.0.0.0:6379", Command::Del(Arity::One(key))).await?;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
       set_result
     });
     assert_eq!(

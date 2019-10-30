@@ -19,3 +19,6 @@ jobs:
         run: cargo build
       - name: test
         run: cargo test
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: ${{ job.services.redis.ports[6379] }}
