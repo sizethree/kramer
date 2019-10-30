@@ -1,3 +1,5 @@
+extern crate kramer;
+
 use kramer::{send, Arity, Command, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
 use std::env::var;
 
@@ -179,4 +181,52 @@ fn test_rpush_multiple() {
   });
 
   assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
+}
+
+#[test]
+fn test_append() {
+  let (key, url) = ("test_append", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let set_result = send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    set_result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(5)));
+}
+
+#[test]
+fn test_get() {
+  let (key, url) = ("test_get", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await?;
+    let result = send(url.as_str(), Command::Strings(StringCommand::Get(key))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("jerry")))
+  );
+}
+
+#[test]
+fn test_get_multi_append() {
+  let (key, url) = ("test_get_multi_append", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await?;
+    send(url.as_str(), Command::Strings(StringCommand::Append(key, "kramer"))).await?;
+    let result = send(url.as_str(), Command::Strings(StringCommand::Get(key))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("jerrykramer")))
+  );
 }

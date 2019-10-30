@@ -166,11 +166,20 @@ where
   S: std::fmt::Display,
 {
   Set(S, S, Option<std::time::Duration>, Insertion),
+  Get(S),
+  Append(S, S),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      StringCommand::Get(key) => write!(formatter, "*2\r\n$3\r\nGET\r\n{}", format_bulk_string(key)),
+      StringCommand::Append(key, value) => write!(
+        formatter,
+        "*3\r\n$6\r\nAPPEND\r\n{}{}",
+        format_bulk_string(key),
+        format_bulk_string(value)
+      ),
       StringCommand::Set(key, value, timeout, insertion) => {
         let (k, v) = (format_bulk_string(key), format_bulk_string(value));
         let (cx, px) = match timeout {
@@ -540,6 +549,22 @@ mod fmt_tests {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Rem("seinfeld", "kramer", 1))),
       "*4\r\n$4\r\nLREM\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$1\r\n1\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_get_fmt() {
+    assert_eq!(
+      format!("{}", Command::Strings(StringCommand::Get("seinfeld"))),
+      "*2\r\n$3\r\nGET\r\n$8\r\nseinfeld\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_append_fmt() {
+    assert_eq!(
+      format!("{}", Command::Strings(StringCommand::Append("seinfeld", "kramer"))),
+      "*3\r\n$6\r\nAPPEND\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n"
     );
   }
 }
