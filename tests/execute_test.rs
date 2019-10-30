@@ -163,6 +163,50 @@ fn test_rpush_single() {
 }
 
 #[test]
+fn test_lpop_single() {
+  let (key, url) = ("test_lpop_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let push = Command::List(ListCommand::Push(
+      (Side::Right, Insertion::Always),
+      key,
+      Arity::Many(vec!["kramer", "jerry"]),
+    ));
+    send(url.as_str(), push).await?;
+    let result = send(url.as_str(), Command::List(ListCommand::Pop(Side::Left, key, None))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("kramer")))
+  );
+}
+
+#[test]
+fn test_rpop_single() {
+  let (key, url) = ("test_rpop_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let push = Command::List(ListCommand::Push(
+      (Side::Right, Insertion::Always),
+      key,
+      Arity::Many(vec!["kramer", "jerry"]),
+    ));
+    send(url.as_str(), push).await?;
+    let result = send(url.as_str(), Command::List(ListCommand::Pop(Side::Right, key, None))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("jerry")))
+  );
+}
+
+#[test]
 fn test_rpush_multiple() {
   let (key, url) = ("test_rpush_many", get_redis_url());
 
@@ -229,4 +273,19 @@ fn test_get_multi_append() {
     result.unwrap(),
     Response::Item(ResponseValue::String(String::from("jerrykramer")))
   );
+}
+
+#[test]
+fn test_decr_single() {
+  let (key, url) = ("test_decr_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let push = Command::Strings(StringCommand::Set(key, "3", None, Insertion::Always));
+    send(url.as_str(), push).await?;
+    let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)),);
 }

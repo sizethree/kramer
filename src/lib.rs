@@ -87,9 +87,8 @@ where
 {
   Len(S),
   Push((Side, Insertion), S, Arity<S>),
-  Pop(Side, S),
+  Pop(Side, S, Option<(Option<Arity<S>>, u64)>),
   Rem(S, S, u64),
-  BlockPop(Side, S, u64),
   Range(S, i64, i64),
 }
 
@@ -111,25 +110,41 @@ impl<S: std::fmt::Display> std::fmt::Display for ListCommand<S> {
 
         write!(formatter, "*4\r\n$4\r\nLREM\r\n{}", end)
       }
-      ListCommand::BlockPop(side, key, time) => {
-        let end = format!("{}{}", format_bulk_string(key), format_bulk_string(time));
-        let cmd = match side {
-          Side::Left => "BLPOP",
-          Side::Right => "BRPOP",
-        };
-        write!(formatter, "*3\r\n$5\r\n{}\r\n{}", cmd, end)
-      }
       ListCommand::Range(key, from, to) => {
         let end = format!("{}{}", format_bulk_string(from), format_bulk_string(to));
         write!(formatter, "*2\r\n$6\r\nLRANGE\r\n{}{}", format_bulk_string(key), end)
       }
       ListCommand::Len(key) => write!(formatter, "*2\r\n$4\r\nLLEN\r\n{}", format_bulk_string(key)),
-      ListCommand::Pop(side, key) => {
-        let cmd = match side {
-          Side::Left => "LPOP",
-          Side::Right => "RPOP",
+      ListCommand::Pop(side, key, block) => {
+        let (cmd, ext, kc) = match (side, block) {
+          (Side::Left, None) => ("LPOP", format!(""), 0),
+          (Side::Right, None) => ("RPOP", format!(""), 0),
+          (Side::Left, Some((None, timeout))) => ("BLPOP", format_bulk_string(timeout), 1),
+          (Side::Right, Some((None, timeout))) => ("BRPOP", format_bulk_string(timeout), 1),
+          (Side::Left, Some((Some(values), timeout))) => {
+            let (vc, ext) = match values {
+              Arity::One(value) => (1, format_bulk_string(value)),
+              Arity::Many(values) => (values.len(), values.iter().map(format_bulk_string).collect::<String>()),
+            };
+            ("BLPOP", format!("{}{}", ext, format_bulk_string(timeout)), vc + 1)
+          }
+          (Side::Right, Some((Some(values), timeout))) => {
+            let (vc, ext) = match values {
+              Arity::One(value) => (1, format_bulk_string(value)),
+              Arity::Many(values) => (values.len(), values.iter().map(format_bulk_string).collect::<String>()),
+            };
+            ("BRPOP", format!("{}{}", ext, format_bulk_string(timeout)), vc + 1)
+          }
         };
-        write!(formatter, "*2\r\n$4\r\n{}\r\n{}", cmd, format_bulk_string(key))
+        write!(
+          formatter,
+          "*{}\r\n${}\r\n{}\r\n{}{}",
+          2 + kc,
+          cmd.len(),
+          cmd,
+          format_bulk_string(key),
+          ext
+        )
       }
       ListCommand::Push(operation, k, Arity::One(v)) => {
         let cmd = match operation {
@@ -167,12 +182,14 @@ where
 {
   Set(S, S, Option<std::time::Duration>, Insertion),
   Get(S),
+  Decr(S),
   Append(S, S),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      StringCommand::Decr(key) => write!(formatter, "*2\r\n$4\r\nDECR\r\n{}", format_bulk_string(key)),
       StringCommand::Get(key) => write!(formatter, "*2\r\n$3\r\nGET\r\n{}", format_bulk_string(key)),
       StringCommand::Append(key, value) => write!(
         formatter,
@@ -442,7 +459,7 @@ mod fmt_tests {
   #[test]
   fn test_command_rpop_fmt() {
     assert_eq!(
-      format!("{}", Command::List(ListCommand::Pop(Side::Right, "seinfeld"))),
+      format!("{}", Command::List(ListCommand::Pop(Side::Right, "seinfeld", None))),
       "*2\r\n$4\r\nRPOP\r\n$8\r\nseinfeld\r\n"
     );
   }
@@ -450,7 +467,7 @@ mod fmt_tests {
   #[test]
   fn test_command_lpop_fmt() {
     assert_eq!(
-      format!("{}", Command::List(ListCommand::Pop(Side::Left, "seinfeld"))),
+      format!("{}", Command::List(ListCommand::Pop(Side::Left, "seinfeld", None))),
       "*2\r\n$4\r\nLPOP\r\n$8\r\nseinfeld\r\n"
     );
   }
@@ -464,12 +481,88 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_blpop_fmt() {
+  fn test_command_brpop_timeout_fmt() {
     assert_eq!(
-      format!("{}", Command::List(ListCommand::BlockPop(Side::Left, "seinfeld", 1))),
-      "*3\r\n$5\r\nBLPOP\r\n$8\r\nseinfeld\r\n$1\r\n1\r\n"
+      format!(
+        "{}",
+        Command::List(ListCommand::Pop(Side::Right, "seinfeld", Some((None, 10))))
+      ),
+      "*3\r\n$5\r\nBRPOP\r\n$8\r\nseinfeld\r\n$2\r\n10\r\n"
     );
   }
+
+  #[test]
+  fn test_command_brpop_timeout_multi_fmt() {
+    assert_eq!(
+      format!(
+        "{}",
+        Command::List(ListCommand::Pop(
+          Side::Right,
+          "seinfeld",
+          Some((Some(Arity::One("derry-girls")), 10))
+        ))
+      ),
+      "*4\r\n$5\r\nBRPOP\r\n$8\r\nseinfeld\r\n$11\r\nderry-girls\r\n$2\r\n10\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_brpop_timeout_multi_many_fmt() {
+    assert_eq!(
+      format!(
+        "{}",
+        Command::List(ListCommand::Pop(
+          Side::Right,
+          "seinfeld",
+          Some((Some(Arity::Many(vec!["derry-girls", "creek"])), 10))
+        ))
+      ),
+      "*5\r\n$5\r\nBRPOP\r\n$8\r\nseinfeld\r\n$11\r\nderry-girls\r\n$5\r\ncreek\r\n$2\r\n10\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_blpop_timeout_fmt() {
+    assert_eq!(
+      format!(
+        "{}",
+        Command::List(ListCommand::Pop(Side::Left, "seinfeld", Some((None, 10))))
+      ),
+      "*3\r\n$5\r\nBLPOP\r\n$8\r\nseinfeld\r\n$2\r\n10\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_blpop_timeout_multi_fmt() {
+    assert_eq!(
+      format!(
+        "{}",
+        Command::List(ListCommand::Pop(
+          Side::Left,
+          "seinfeld",
+          Some((Some(Arity::One("derry-girls")), 10))
+        ))
+      ),
+      "*4\r\n$5\r\nBLPOP\r\n$8\r\nseinfeld\r\n$11\r\nderry-girls\r\n$2\r\n10\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_blpop_timeout_multi_many_fmt() {
+    assert_eq!(
+      format!(
+        "{}",
+        Command::List(ListCommand::Pop(
+          Side::Left,
+          "seinfeld",
+          Some((Some(Arity::Many(vec!["derry-girls", "creek"])), 10))
+        ))
+      ),
+      "*5\r\n$5\r\nBLPOP\r\n$8\r\nseinfeld\r\n$11\r\nderry-girls\r\n$5\r\ncreek\r\n$2\r\n10\r\n"
+    );
+  }
+
+  /*
 
   #[test]
   fn test_command_brpop_fmt() {
@@ -478,6 +571,7 @@ mod fmt_tests {
       "*3\r\n$5\r\nBRPOP\r\n$8\r\nseinfeld\r\n$1\r\n1\r\n"
     );
   }
+  */
 
   #[test]
   fn test_command_del_fmt() {
@@ -557,6 +651,14 @@ mod fmt_tests {
     assert_eq!(
       format!("{}", Command::Strings(StringCommand::Get("seinfeld"))),
       "*2\r\n$3\r\nGET\r\n$8\r\nseinfeld\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_decr_fmt() {
+    assert_eq!(
+      format!("{}", Command::Strings(StringCommand::Decr("seinfeld"))),
+      "*2\r\n$4\r\nDECR\r\n$8\r\nseinfeld\r\n"
     );
   }
 
