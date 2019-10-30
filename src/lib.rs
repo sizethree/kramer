@@ -239,11 +239,14 @@ fn readline(result: Option<Result<String, IOError>>) -> Result<ResponseLine, IOE
   }
 }
 
-pub async fn send<S: std::fmt::Display>(addr: &str, message: Command<S>) -> Result<Response, IOError> {
-  let mut stream = TcpStream::connect(addr).await?;
-  stream.write_all(format!("{}", message).as_bytes()).await?;
+pub async fn execute<C, S>(mut connection: C, message: Command<S>) -> Result<Response, IOError>
+where
+  S: std::fmt::Display,
+  C: async_std::io::Write + async_std::io::Read + std::marker::Unpin,
+{
+  connection.write_all(format!("{}", message).as_bytes()).await?;
 
-  let mut lines = async_std::io::BufReader::new(stream).lines();
+  let mut lines = async_std::io::BufReader::new(connection).lines();
 
   match readline(lines.next().await) {
     Ok(ResponseLine::Array(size)) => {
@@ -289,6 +292,14 @@ pub async fn send<S: std::fmt::Display>(addr: &str, message: Command<S>) -> Resu
     Ok(ResponseLine::Error(e)) => Err(IOError::new(IOErrorKind::Other, e)),
     Err(e) => Err(e),
   }
+}
+
+pub async fn send<S>(addr: &str, message: Command<S>) -> Result<Response, IOError>
+where
+  S: std::fmt::Display,
+{
+  let mut stream = TcpStream::connect(addr).await?;
+  execute(&mut stream, message).await
 }
 
 #[cfg(test)]
@@ -470,6 +481,28 @@ mod fmt_tests {
   }
 
   #[test]
+  fn test_command_set_fmt_if_not_exists() {
+    assert_eq!(
+      format!(
+        "{}",
+        Command::Strings(StringCommand::Set("seinfeld", "kramer", None, Insertion::IfNotExists))
+      ),
+      "*4\r\n$3\r\nSET\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$2\r\nNX\r\n"
+    );
+  }
+
+  #[test]
+  fn test_command_set_fmt_if_exists() {
+    assert_eq!(
+      format!(
+        "{}",
+        Command::Strings(StringCommand::Set("seinfeld", "kramer", None, Insertion::IfExists))
+      ),
+      "*4\r\n$3\r\nSET\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$2\r\nXX\r\n"
+    );
+  }
+
+  #[test]
   fn test_command_lrem_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Rem("seinfeld", "kramer", 1))),
@@ -619,5 +652,47 @@ mod send_tests {
       result.unwrap(),
       Response::Item(ResponseValue::String(String::from("OK")))
     )
+  }
+
+  #[test]
+  fn test_rpush_single() {
+    let (key, url) = ("test_rpush_single", get_redis_url());
+
+    let result = async_std::task::block_on(async {
+      let set_result = send(
+        url.as_str(),
+        Command::List(ListCommand::Push(
+          (Side::Right, Insertion::Always),
+          key,
+          Arity::One("kramer"),
+        )),
+      )
+      .await;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
+      set_result
+    });
+
+    assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+  }
+
+  #[test]
+  fn test_rpush_multiple() {
+    let (key, url) = ("test_rpush_many", get_redis_url());
+
+    let result = async_std::task::block_on(async {
+      let set_result = send(
+        url.as_str(),
+        Command::List(ListCommand::Push(
+          (Side::Right, Insertion::Always),
+          key,
+          Arity::Many(vec!["kramer", "jerry"]),
+        )),
+      )
+      .await;
+      send(url.as_str(), Command::Del(Arity::One(key))).await?;
+      set_result
+    });
+
+    assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
   }
 }
