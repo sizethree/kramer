@@ -181,7 +181,7 @@ where
   S: std::fmt::Display,
 {
   Set(S, S, Option<std::time::Duration>, Insertion),
-  Get(S),
+  Get(Arity<S>),
   Decr(S, usize),
   Append(S, S),
 }
@@ -201,7 +201,12 @@ impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
           format_bulk_string(amt)
         )
       }
-      StringCommand::Get(key) => write!(formatter, "*2\r\n$3\r\nGET\r\n{}", format_bulk_string(key)),
+      StringCommand::Get(Arity::One(key)) => write!(formatter, "*2\r\n$3\r\nGET\r\n{}", format_bulk_string(key)),
+      StringCommand::Get(Arity::Many(keys)) => {
+        let count = keys.len();
+        let tail = keys.iter().map(format_bulk_string).collect::<String>();
+        write!(formatter, "*{}\r\n$4\r\nMGET\r\n{}", count + 1, tail)
+      }
       StringCommand::Append(key, value) => write!(
         formatter,
         "*3\r\n$6\r\nAPPEND\r\n{}{}",
@@ -788,7 +793,7 @@ mod fmt_tests {
   #[test]
   fn test_command_get_fmt() {
     assert_eq!(
-      format!("{}", Command::Strings(StringCommand::Get("seinfeld"))),
+      format!("{}", Command::Strings(StringCommand::Get(Arity::One("seinfeld")))),
       "*2\r\n$3\r\nGET\r\n$8\r\nseinfeld\r\n"
     );
   }

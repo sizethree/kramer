@@ -179,6 +179,25 @@ fn test_lpush_single() {
 }
 
 #[test]
+fn test_llen_single() {
+  let (key, url) = ("test_llen_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let ins = Command::List(ListCommand::Push(
+      (Side::Left, Insertion::Always),
+      key,
+      Arity::One("kramer"),
+    ));
+    send(url.as_str(), ins).await?;
+    let result = send(url.as_str(), Command::List(ListCommand::Len(key))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
 fn test_lpush_multi() {
   let (key, url) = ("test_lpush_multi", get_redis_url());
 
@@ -355,7 +374,7 @@ fn test_get() {
 
   let result = async_std::task::block_on(async {
     send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await?;
-    let result = send(url.as_str(), Command::Strings(StringCommand::Get(key))).await;
+    let result = send(url.as_str(), Command::Strings(StringCommand::Get(Arity::One(key)))).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
     result
   });
@@ -373,7 +392,7 @@ fn test_get_multi_append() {
   let result = async_std::task::block_on(async {
     send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await?;
     send(url.as_str(), Command::Strings(StringCommand::Append(key, "kramer"))).await?;
-    let result = send(url.as_str(), Command::Strings(StringCommand::Get(key))).await;
+    let result = send(url.as_str(), Command::Strings(StringCommand::Get(Arity::One(key)))).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
     result
   });
@@ -381,6 +400,32 @@ fn test_get_multi_append() {
   assert_eq!(
     result.unwrap(),
     Response::Item(ResponseValue::String(String::from("jerrykramer")))
+  );
+}
+
+#[test]
+fn test_multi_get() {
+  let (one, two, url) = ("test_multi_get_1", "test_multi_get_2", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), Command::Strings(StringCommand::Append(one, "jerry"))).await?;
+    send(url.as_str(), Command::Strings(StringCommand::Append(two, "kramer"))).await?;
+    let result = send(
+      url.as_str(),
+      Command::Strings(StringCommand::Get(Arity::Many(vec![one, two]))),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("jerry")),
+      ResponseValue::String(String::from("kramer")),
+    ]),
   );
 }
 
