@@ -303,7 +303,7 @@ where
   S: std::fmt::Display,
   C: async_std::io::Write + async_std::io::Read + std::marker::Unpin,
 {
-  write!(connection, "{}", message).await;
+  write!(connection, "{}", message).await?;
 
   let mut lines = async_std::io::BufReader::new(connection).lines();
 
