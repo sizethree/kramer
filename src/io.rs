@@ -1,8 +1,8 @@
-#[cfg(feature = "kramer-io")]
+#![cfg(feature = "kramer-io")]
+
 extern crate async_std;
-#[cfg(feature = "kramer-io")]
+
 use async_std::net::TcpStream;
-#[cfg(feature = "kramer-io")]
 use async_std::prelude::*;
 
 use std::io::{Error, ErrorKind};
@@ -31,7 +31,6 @@ pub enum Response {
   Error,
 }
 
-#[cfg(feature = "kramer-io")]
 fn read_line_size(line: String) -> Result<Option<usize>, Error> {
   match line.split_at(1).1 {
     "-1" => Ok(None),
@@ -47,7 +46,6 @@ fn read_line_size(line: String) -> Result<Option<usize>, Error> {
   }
 }
 
-#[cfg(feature = "kramer-io")]
 fn readline(result: Option<Result<String, Error>>) -> Result<ResponseLine, Error> {
   let line = result.ok_or_else(|| Error::new(ErrorKind::Other, "no line to work with"))??;
 
@@ -80,7 +78,6 @@ fn readline(result: Option<Result<String, Error>>) -> Result<ResponseLine, Error
   }
 }
 
-#[cfg(feature = "kramer-io")]
 pub async fn read<C>(connection: C) -> Result<Response, Error>
 where
   C: async_std::io::Read + std::marker::Unpin,
@@ -133,7 +130,6 @@ where
   }
 }
 
-#[cfg(feature = "kramer-io")]
 pub async fn execute<C, S>(mut connection: C, message: S) -> Result<Response, Error>
 where
   S: std::fmt::Display,
@@ -143,7 +139,6 @@ where
   read(connection).await
 }
 
-#[cfg(feature = "kramer-io")]
 pub async fn send<S>(addr: &str, message: S) -> Result<Response, Error>
 where
   S: std::fmt::Display,
