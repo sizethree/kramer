@@ -142,6 +142,99 @@ fn test_set_with_duration() {
 }
 
 #[test]
+fn test_lpush_single() {
+  let (key, url) = ("test_lpush_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let out = send(
+      url.as_str(),
+      Command::List(ListCommand::Push(
+        (Side::Left, Insertion::Always),
+        key,
+        Arity::One("kramer"),
+      )),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_lpush_multi() {
+  let (key, url) = ("test_lpush_multi", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let out = send(
+      url.as_str(),
+      Command::List(ListCommand::Push(
+        (Side::Left, Insertion::Always),
+        key,
+        Arity::Many(vec!["kramer", "jerry"]),
+      )),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
+}
+
+#[test]
+fn test_lpushx_single_w_no_exists() {
+  let (key, url) = ("test_lpushx_single_w_no_exists", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let out = send(
+      url.as_str(),
+      Command::List(ListCommand::Push(
+        (Side::Left, Insertion::IfExists),
+        key,
+        Arity::One("kramer"),
+      )),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)));
+}
+
+#[test]
+fn test_lpushx_single_w_exists() {
+  let (key, url) = ("test_lpushx_single_w_exists", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(
+      url.as_str(),
+      Command::List(ListCommand::Push(
+        (Side::Left, Insertion::Always),
+        key,
+        Arity::One("kramer"),
+      )),
+    )
+    .await?;
+    let out = send(
+      url.as_str(),
+      Command::List(ListCommand::Push(
+        (Side::Left, Insertion::IfExists),
+        key,
+        Arity::One("kramer"),
+      )),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
+}
+
+#[test]
 fn test_rpush_single() {
   let (key, url) = ("test_rpush_single", get_redis_url());
 

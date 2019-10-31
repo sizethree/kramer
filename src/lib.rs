@@ -229,6 +229,12 @@ where
   Strings(StringCommand<S>),
 }
 
+impl<S: std::fmt::Display> Command<S> {
+  pub fn cursor(&self) -> std::io::Cursor<String> {
+    return std::io::Cursor::new(format!("{}", self));
+  }
+}
+
 impl<S: std::fmt::Display> std::fmt::Display for Command<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
@@ -667,6 +673,17 @@ mod fmt_tests {
     assert_eq!(
       format!("{}", Command::Strings(StringCommand::Append("seinfeld", "kramer"))),
       "*3\r\n$6\r\nAPPEND\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n"
+    );
+  }
+
+  #[test]
+  fn test_cursor_read() {
+    let cmd = Command::Strings(StringCommand::Decr("one"));
+    let mut buffer = Vec::new();
+    std::io::copy(&mut cmd.cursor(), &mut buffer).unwrap();
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*2\r\n$4\r\nDECR\r\n$3\r\none\r\n")
     );
   }
 }
