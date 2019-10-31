@@ -313,11 +313,13 @@ where
   List(ListCommand<S>),
   Strings(StringCommand<S>),
   Hashes(HashCommand<S>),
+  Echo(S),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for Command<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      Command::Echo(value) => write!(formatter, "*2\r\n$4\r\nECHO\r\n{}", format_bulk_string(value)),
       Command::Keys(value) => write!(formatter, "*2\r\n$4\r\nKEYS\r\n{}", format_bulk_string(value)),
       Command::Exists(Arity::Many(values)) => {
         let len = values.len();
@@ -803,6 +805,19 @@ mod fmt_tests {
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*4\r\n$4\r\nHSET\r\n$8\r\nseinfeld\r\n$4\r\nname\r\n$6\r\nkramer\r\n")
+    );
+  }
+
+  #[test]
+  fn test_echo() {
+    let cmd = Command::Echo("hello");
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from(
+        "*2\r\n$4\r\nECHO\r\n$5\r\nhello\r\n"
+      )
     );
   }
 

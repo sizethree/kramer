@@ -10,6 +10,13 @@ fn get_redis_url() -> String {
 }
 
 #[test]
+fn test_echo() {
+  let url = get_redis_url();
+  let result = async_std::task::block_on(send(url.as_str(), Command::Echo("hello")));
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::String("hello".to_string())));
+}
+
+#[test]
 fn test_send_keys() {
   let url = get_redis_url();
   let result = async_std::task::block_on(send(url.as_str(), Command::Keys("*")));
