@@ -7,5 +7,9 @@ homepage = "https://github.com/sizethree/kramer"
 repository = "https://github.com/sizethree/kramer.git"
 description = "Redis communication"
 
-[dependencies]
-async-std = "^0.99"
+[dependencies.async-std]
+version = "^0.99"
+optional = true
+
+[features]
+kramer-io = ["async-std"]

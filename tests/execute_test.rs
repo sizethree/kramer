@@ -1,3 +1,5 @@
+#![cfg(feature = "kramer-io")]
+
 extern crate kramer;
 
 use kramer::{send, Arity, Command, HashCommand, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
@@ -525,7 +527,7 @@ fn test_hdel_single() {
       Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always)),
     )
     .await?;
-    let del = Command::Hashes(HashCommand::Del(key, "name", None));
+    let del = Command::Hashes(HashCommand::Del(key, Arity::One("name")));
     let result = send(url.as_str(), del).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
     result
@@ -548,11 +550,7 @@ fn test_hdel_multi() {
       )),
     )
     .await?;
-    let del = Command::Hashes(HashCommand::Del(
-      key,
-      "name",
-      Some(Arity::Many(vec!["name", "friend", "foo"])),
-    ));
+    let del = Command::Hashes(HashCommand::Del(key, Arity::Many(vec!["name", "friend", "foo"])));
     let result = send(url.as_str(), del).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
     result
@@ -1060,6 +1058,7 @@ fn test_linsert_left_present() {
   );
 }
 
+#[cfg(feature = "kramer-io")]
 #[test]
 fn test_linsert_right_present() {
   let (key, url) = ("test_linsert_right_present", get_redis_url());
