@@ -218,6 +218,69 @@ impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
 }
 
 #[derive(Debug)]
+pub enum HashCommand<S>
+where
+  S: std::fmt::Display,
+{
+  Del(S, S, Option<Arity<S>>),
+  Set(S, Arity<(S, S)>),
+}
+
+impl<S: std::fmt::Display> std::fmt::Display for HashCommand<S> {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    match self {
+      HashCommand::Set(key, Arity::One((field, value))) => write!(
+        formatter,
+        "*4\r\n$4\r\nHSET\r\n{}{}{}",
+        format_bulk_string(key),
+        format_bulk_string(field),
+        format_bulk_string(value)
+      ),
+      HashCommand::Set(key, Arity::Many(mappings)) => {
+        let count = mappings.len();
+        let tail = mappings
+          .iter()
+          .map(|(k, v)| format!("{}{}", format_bulk_string(k), format_bulk_string(v)))
+          .collect::<String>();
+
+        write!(
+          formatter,
+          "*{}\r\n$4\r\nHSET\r\n{}{}",
+          2 + (count * 2),
+          format_bulk_string(key),
+          tail
+        )
+      }
+      HashCommand::Del(key, field, None) => write!(
+        formatter,
+        "*3\r\n$4\r\nHDEL\r\n{}{}",
+        format_bulk_string(key),
+        format_bulk_string(field)
+      ),
+      HashCommand::Del(key, field, Some(Arity::One(s))) => write!(
+        formatter,
+        "*4\r\n$4\r\nHDEL\r\n{}{}{}",
+        format_bulk_string(key),
+        format_bulk_string(field),
+        format_bulk_string(s)
+      ),
+      HashCommand::Del(key, field, Some(Arity::Many(s))) => {
+        let count = s.len();
+        let bits = s.iter().map(format_bulk_string).collect::<String>();
+        write!(
+          formatter,
+          "*{}\r\n$4\r\nHDEL\r\n{}{}{}",
+          count + 3,
+          format_bulk_string(key),
+          format_bulk_string(field),
+          bits
+        )
+      }
+    }
+  }
+}
+
+#[derive(Debug)]
 pub enum Command<S>
 where
   S: std::fmt::Display,
@@ -227,6 +290,7 @@ where
   Exists(Arity<S>),
   List(ListCommand<S>),
   Strings(StringCommand<S>),
+  Hashes(HashCommand<S>),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for Command<S> {
@@ -247,6 +311,7 @@ impl<S: std::fmt::Display> std::fmt::Display for Command<S> {
       }
       Command::List(list_command) => write!(formatter, "{}", list_command),
       Command::Strings(string_command) => write!(formatter, "{}", string_command),
+      Command::Hashes(hash_command) => write!(formatter, "{}", hash_command),
     }
   }
 }
@@ -363,7 +428,7 @@ where
 
 #[cfg(test)]
 mod fmt_tests {
-  use super::{Arity, Command, Insertion, ListCommand, Side, StringCommand};
+  use super::{Arity, Command, HashCommand, Insertion, ListCommand, Side, StringCommand};
   use std::io::Write;
 
   #[test]
@@ -679,6 +744,55 @@ mod fmt_tests {
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*2\r\n$4\r\nDECR\r\n$3\r\none\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hdel_single() {
+    let cmd = Command::Hashes(HashCommand::Del("seinfeld", "kramer", None));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*3\r\n$4\r\nHDEL\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hdel_many() {
+    let cmd = Command::Hashes(HashCommand::Del("seinfeld", "kramer", Some(Arity::Many(vec!["jerry"]))));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*4\r\n$4\r\nHDEL\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$5\r\njerry\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hset_single() {
+    let cmd = Command::Hashes(HashCommand::Set("seinfeld", Arity::One(("name", "kramer"))));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*4\r\n$4\r\nHSET\r\n$8\r\nseinfeld\r\n$4\r\nname\r\n$6\r\nkramer\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hset_many() {
+    let cmd = Command::Hashes(HashCommand::Set(
+      "seinfeld",
+      Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+    ));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from(
+        "*6\r\n$4\r\nHSET\r\n$8\r\nseinfeld\r\n$4\r\nname\r\n$6\r\nkramer\r\n$6\r\nfriend\r\n$5\r\njerry\r\n"
+      )
     );
   }
 }

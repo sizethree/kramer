@@ -1,6 +1,6 @@
 extern crate kramer;
 
-use kramer::{send, Arity, Command, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
+use kramer::{send, Arity, Command, HashCommand, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
 use std::env::var;
 
 fn get_redis_url() -> String {
@@ -380,5 +380,81 @@ fn test_decr_single() {
     result
   });
 
-  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)),);
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
+}
+
+#[test]
+fn test_hset_single() {
+  let (key, url) = ("test_hset_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let do_set = Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer"))));
+    let result = send(url.as_str(), do_set).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_hset_multi() {
+  let (key, url) = ("test_hset_multi", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let do_set = Command::Hashes(HashCommand::Set(
+      key,
+      Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+    ));
+    let result = send(url.as_str(), do_set).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
+}
+
+#[test]
+fn test_hdel_single() {
+  let (key, url) = ("test_hdel_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(
+      url.as_str(),
+      Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")))),
+    )
+    .await?;
+    let del = Command::Hashes(HashCommand::Del(key, "name", None));
+    let result = send(url.as_str(), del).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_hdel_multi() {
+  let (key, url) = ("test_hdel_multi", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(
+      url.as_str(),
+      Command::Hashes(HashCommand::Set(
+        key,
+        Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+      )),
+    )
+    .await?;
+    let del = Command::Hashes(HashCommand::Del(
+      key,
+      "name",
+      Some(Arity::Many(vec!["name", "friend", "foo"])),
+    ));
+    let result = send(url.as_str(), del).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
 }
