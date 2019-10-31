@@ -13,7 +13,10 @@ fn get_redis_url() -> String {
 fn test_echo() {
   let url = get_redis_url();
   let result = async_std::task::block_on(send(url.as_str(), Command::Echo("hello")));
-  assert_eq!(result.unwrap(), Response::Item(ResponseValue::String("hello".to_string())));
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String("hello".to_string()))
+  );
 }
 
 #[test]
@@ -382,12 +385,27 @@ fn test_decr_single() {
   let result = async_std::task::block_on(async {
     let push = Command::Strings(StringCommand::Set(key, "3", None, Insertion::Always));
     send(url.as_str(), push).await?;
-    let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key))).await;
+    let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key, 1))).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
     result
   });
 
   assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
+}
+
+#[test]
+fn test_decrby_single() {
+  let (key, url) = ("test_decrby_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let push = Command::Strings(StringCommand::Set(key, "3", None, Insertion::Always));
+    send(url.as_str(), push).await?;
+    let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key, 2))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
 }
 
 #[test]

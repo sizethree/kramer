@@ -182,14 +182,25 @@ where
 {
   Set(S, S, Option<std::time::Duration>, Insertion),
   Get(S),
-  Decr(S),
+  Decr(S, usize),
   Append(S, S),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
-      StringCommand::Decr(key) => write!(formatter, "*2\r\n$4\r\nDECR\r\n{}", format_bulk_string(key)),
+      StringCommand::Decr(key, amt) => {
+        if *amt == 1usize {
+          return write!(formatter, "*2\r\n$4\r\nDECR\r\n{}", format_bulk_string(key),);
+        }
+
+        write!(
+          formatter,
+          "*3\r\n$6\r\nDECRBY\r\n{}{}",
+          format_bulk_string(key),
+          format_bulk_string(amt)
+        )
+      }
       StringCommand::Get(key) => write!(formatter, "*2\r\n$3\r\nGET\r\n{}", format_bulk_string(key)),
       StringCommand::Append(key, value) => write!(
         formatter,
@@ -747,7 +758,7 @@ mod fmt_tests {
   #[test]
   fn test_command_decr_fmt() {
     assert_eq!(
-      format!("{}", Command::Strings(StringCommand::Decr("seinfeld"))),
+      format!("{}", Command::Strings(StringCommand::Decr("seinfeld", 1))),
       "*2\r\n$4\r\nDECR\r\n$8\r\nseinfeld\r\n"
     );
   }
@@ -762,7 +773,7 @@ mod fmt_tests {
 
   #[test]
   fn test_macro_write() {
-    let cmd = Command::Strings(StringCommand::Decr("one"));
+    let cmd = Command::Strings(StringCommand::Decr("one", 1));
     let mut buffer = Vec::new();
     write!(buffer, "{}", cmd).expect("was able to write");
     assert_eq!(
@@ -815,9 +826,7 @@ mod fmt_tests {
     write!(buffer, "{}", cmd).expect("was able to write");
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
-      String::from(
-        "*2\r\n$4\r\nECHO\r\n$5\r\nhello\r\n"
-      )
+      String::from("*2\r\n$4\r\nECHO\r\n$5\r\nhello\r\n")
     );
   }
 
