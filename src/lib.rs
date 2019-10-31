@@ -223,20 +223,42 @@ where
   S: std::fmt::Display,
 {
   Del(S, S, Option<Arity<S>>),
-  Set(S, Arity<(S, S)>),
+  Set(S, Arity<(S, S)>, Insertion),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for HashCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
-      HashCommand::Set(key, Arity::One((field, value))) => write!(
+      HashCommand::Set(key, Arity::One((field, value)), Insertion::IfNotExists) => write!(
+        formatter,
+        "*4\r\n$6\r\nHSETNX\r\n{}{}{}",
+        format_bulk_string(key),
+        format_bulk_string(field),
+        format_bulk_string(value)
+      ),
+      HashCommand::Set(key, Arity::Many(mappings), Insertion::IfNotExists) => {
+        let count = mappings.len();
+        let tail = mappings
+          .iter()
+          .map(|(k, v)| format!("{}{}", format_bulk_string(k), format_bulk_string(v)))
+          .collect::<String>();
+
+        write!(
+          formatter,
+          "*{}\r\n$6\r\nHSETNX\r\n{}{}",
+          2 + (count * 2),
+          format_bulk_string(key),
+          tail
+        )
+      }
+      HashCommand::Set(key, Arity::One((field, value)), _) => write!(
         formatter,
         "*4\r\n$4\r\nHSET\r\n{}{}{}",
         format_bulk_string(key),
         format_bulk_string(field),
         format_bulk_string(value)
       ),
-      HashCommand::Set(key, Arity::Many(mappings)) => {
+      HashCommand::Set(key, Arity::Many(mappings), _) => {
         let count = mappings.len();
         let tail = mappings
           .iter()
@@ -771,7 +793,11 @@ mod fmt_tests {
 
   #[test]
   fn test_hset_single() {
-    let cmd = Command::Hashes(HashCommand::Set("seinfeld", Arity::One(("name", "kramer"))));
+    let cmd = Command::Hashes(HashCommand::Set(
+      "seinfeld",
+      Arity::One(("name", "kramer")),
+      Insertion::Always,
+    ));
     let mut buffer = Vec::new();
     write!(buffer, "{}", cmd).expect("was able to write");
     assert_eq!(
@@ -785,6 +811,7 @@ mod fmt_tests {
     let cmd = Command::Hashes(HashCommand::Set(
       "seinfeld",
       Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+      Insertion::Always,
     ));
     let mut buffer = Vec::new();
     write!(buffer, "{}", cmd).expect("was able to write");

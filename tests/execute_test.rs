@@ -388,7 +388,7 @@ fn test_hset_single() {
   let (key, url) = ("test_hset_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let do_set = Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer"))));
+    let do_set = Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always));
     let result = send(url.as_str(), do_set).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
     result
@@ -405,6 +405,7 @@ fn test_hset_multi() {
     let do_set = Command::Hashes(HashCommand::Set(
       key,
       Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+      Insertion::Always,
     ));
     let result = send(url.as_str(), do_set).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -421,7 +422,7 @@ fn test_hdel_single() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")))),
+      Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always)),
     )
     .await?;
     let del = Command::Hashes(HashCommand::Del(key, "name", None));
@@ -443,6 +444,7 @@ fn test_hdel_multi() {
       Command::Hashes(HashCommand::Set(
         key,
         Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+        Insertion::Always,
       )),
     )
     .await?;
@@ -457,4 +459,42 @@ fn test_hdel_multi() {
   });
 
   assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(2)));
+}
+
+#[test]
+fn test_hsetnx_single_w_no_exists() {
+  let (key, url) = ("test_hsetnx_single_w_no_exists", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let do_set = Command::Hashes(HashCommand::Set(
+      key,
+      Arity::One(("name", "kramer")),
+      Insertion::IfNotExists,
+    ));
+    let result = send(url.as_str(), do_set).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_hsetnx_single_w_exists() {
+  let (key, url) = ("test_hsetnx_single_w_exists", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let pre_set = Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always));
+    send(url.as_str(), pre_set).await?;
+    let do_set = Command::Hashes(HashCommand::Set(
+      key,
+      Arity::One(("name", "kramer")),
+      Insertion::IfNotExists,
+    ));
+    let result = send(url.as_str(), do_set).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)));
 }
