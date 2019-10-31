@@ -3,6 +3,7 @@ name = "kramer"
 version = "0.1.0"
 authors = ["Danny Hadley <dadleyy@gmail.com>"]
 edition = "2018"
+license = "MIT"
 homepage = "https://github.com/sizethree/kramer"
 repository = "https://github.com/sizethree/kramer.git"
 description = "Redis communication"
