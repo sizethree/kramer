@@ -89,6 +89,10 @@ where
   Push((Side, Insertion), S, Arity<S>),
   Pop(Side, S, Option<(Option<Arity<S>>, u64)>),
   Rem(S, S, u64),
+  Index(S, i64),
+  Set(S, u64, S),
+  Insert(S, Side, S, S),
+  Trim(S, i64, i64),
   Range(S, i64, i64),
 }
 
@@ -100,19 +104,56 @@ fn format_bulk_string<S: std::fmt::Display>(input: S) -> String {
 impl<S: std::fmt::Display> std::fmt::Display for ListCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      ListCommand::Trim(key, start, stop) => {
+        let tail = format!(
+          "{}{}{}",
+          format_bulk_string(key),
+          format_bulk_string(start),
+          format_bulk_string(stop)
+        );
+        write!(formatter, "*4\r\n$5\r\nLTRIM\r\n{}", tail)
+      }
+      ListCommand::Set(key, index, element) => {
+        let tail = format!(
+          "{}{}{}",
+          format_bulk_string(key),
+          format_bulk_string(index),
+          format_bulk_string(element)
+        );
+        write!(formatter, "*4\r\n$4\r\nLSET\r\n{}", tail)
+      }
+      ListCommand::Insert(key, side, pivot, element) => {
+        let side = match side {
+          Side::Left => format_bulk_string("BEFORE"),
+          Side::Right => format_bulk_string("AFTER"),
+        };
+        let tail = format!("{}{}", format_bulk_string(pivot), format_bulk_string(element));
+
+        write!(
+          formatter,
+          "*5\r\n$7\r\nLINSERT\r\n{}{}{}",
+          format_bulk_string(key),
+          side,
+          tail,
+        )
+      }
+      ListCommand::Index(key, amt) => {
+        let tail = format!("{}{}", format_bulk_string(key), format_bulk_string(amt));
+        write!(formatter, "*3\r\n$6\r\nLINDEX\r\n{}", tail)
+      }
       ListCommand::Rem(key, value, count) => {
         let end = format!(
           "{}{}{}",
           format_bulk_string(key),
+          format_bulk_string(count),
           format_bulk_string(value),
-          format_bulk_string(count)
         );
 
         write!(formatter, "*4\r\n$4\r\nLREM\r\n{}", end)
       }
       ListCommand::Range(key, from, to) => {
         let end = format!("{}{}", format_bulk_string(from), format_bulk_string(to));
-        write!(formatter, "*2\r\n$6\r\nLRANGE\r\n{}{}", format_bulk_string(key), end)
+        write!(formatter, "*4\r\n$6\r\nLRANGE\r\n{}{}", format_bulk_string(key), end)
       }
       ListCommand::Len(key) => write!(formatter, "*2\r\n$4\r\nLLEN\r\n{}", format_bulk_string(key)),
       ListCommand::Pop(side, key, block) => {
@@ -183,24 +224,27 @@ where
   Set(Arity<(S, S)>, Option<std::time::Duration>, Insertion),
   Get(Arity<S>),
   Decr(S, usize),
+  Incr(S, i64),
   Append(S, S),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
-      StringCommand::Decr(key, amt) => {
-        if *amt == 1usize {
-          return write!(formatter, "*2\r\n$4\r\nDECR\r\n{}", format_bulk_string(key),);
-        }
-
-        write!(
-          formatter,
-          "*3\r\n$6\r\nDECRBY\r\n{}{}",
-          format_bulk_string(key),
-          format_bulk_string(amt)
-        )
-      }
+      StringCommand::Incr(key, 1) => write!(formatter, "*2\r\n$4\r\nINCR\r\n{}", format_bulk_string(key)),
+      StringCommand::Incr(key, amt) => write!(
+        formatter,
+        "*3\r\n$6\r\nINCRBY\r\n{}{}",
+        format_bulk_string(key),
+        format_bulk_string(amt)
+      ),
+      StringCommand::Decr(key, 1) => write!(formatter, "*2\r\n$4\r\nDECR\r\n{}", format_bulk_string(key)),
+      StringCommand::Decr(key, amt) => write!(
+        formatter,
+        "*3\r\n$6\r\nDECRBY\r\n{}{}",
+        format_bulk_string(key),
+        format_bulk_string(amt)
+      ),
       StringCommand::Get(Arity::One(key)) => write!(formatter, "*2\r\n$3\r\nGET\r\n{}", format_bulk_string(key)),
       StringCommand::Get(Arity::Many(keys)) => {
         let count = keys.len();
@@ -650,7 +694,7 @@ mod fmt_tests {
   fn test_lrange_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Range("seinfeld", 0, -1))),
-      "*2\r\n$6\r\nLRANGE\r\n$8\r\nseinfeld\r\n$1\r\n0\r\n$2\r\n-1\r\n"
+      "*4\r\n$6\r\nLRANGE\r\n$8\r\nseinfeld\r\n$1\r\n0\r\n$2\r\n-1\r\n"
     );
   }
 
@@ -827,7 +871,7 @@ mod fmt_tests {
   fn test_lrem_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Rem("seinfeld", "kramer", 1))),
-      "*4\r\n$4\r\nLREM\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$1\r\n1\r\n"
+      "*4\r\n$4\r\nLREM\r\n$8\r\nseinfeld\r\n$1\r\n1\r\n$6\r\nkramer\r\n"
     );
   }
 
@@ -1035,6 +1079,72 @@ mod fmt_tests {
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*3\r\n$4\r\nHGET\r\n$8\r\nseinfeld\r\n$4\r\nname\r\n")
+    );
+  }
+
+  #[test]
+  fn test_ltrim() {
+    let cmd = Command::List(ListCommand::Trim("episodes", 0, 10));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*4\r\n$5\r\nLTRIM\r\n$8\r\nepisodes\r\n$1\r\n0\r\n$2\r\n10\r\n")
+    );
+  }
+
+  #[test]
+  fn test_linsert_before() {
+    let cmd = Command::List(ListCommand::Insert("episodes", Side::Left, "10", "9"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*5\r\n$7\r\nLINSERT\r\n$8\r\nepisodes\r\n$6\r\nBEFORE\r\n$2\r\n10\r\n$1\r\n9\r\n")
+    );
+  }
+
+  #[test]
+  fn test_linsert_after() {
+    let cmd = Command::List(ListCommand::Insert("episodes", Side::Right, "10", "11"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*5\r\n$7\r\nLINSERT\r\n$8\r\nepisodes\r\n$5\r\nAFTER\r\n$2\r\n10\r\n$2\r\n11\r\n")
+    );
+  }
+
+  #[test]
+  fn test_lrem() {
+    let cmd = Command::List(ListCommand::Rem("episodes", "10", 100));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*4\r\n$4\r\nLREM\r\n$8\r\nepisodes\r\n$3\r\n100\r\n$2\r\n10\r\n")
+    );
+  }
+
+  #[test]
+  fn test_lindex() {
+    let cmd = Command::List(ListCommand::Index("episodes", 1));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*3\r\n$6\r\nLINDEX\r\n$8\r\nepisodes\r\n$1\r\n1\r\n")
+    );
+  }
+
+  #[test]
+  fn test_lset() {
+    let cmd = Command::List(ListCommand::Set("episodes", 1, "pilot"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*4\r\n$4\r\nLSET\r\n$8\r\nepisodes\r\n$1\r\n1\r\n$5\r\npilot\r\n")
     );
   }
 }

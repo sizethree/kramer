@@ -910,3 +910,185 @@ fn test_hincrby() {
     Response::Item(ResponseValue::String(String::from("20")))
   );
 }
+
+#[test]
+fn test_lrange() {
+  let (key, url) = ("test_lrange", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let ins = Command::List(ListCommand::Push(
+      (Side::Left, Insertion::Always),
+      key,
+      Arity::One("kramer"),
+    ));
+    send(url.as_str(), ins).await?;
+    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![ResponseValue::String(String::from("kramer"))])
+  );
+}
+
+#[test]
+fn test_lindex_present() {
+  let (key, url) = ("test_lindex_present", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let ins = Command::List(ListCommand::Push(
+      (Side::Left, Insertion::Always),
+      key,
+      Arity::One("kramer"),
+    ));
+    send(url.as_str(), ins).await?;
+    let out = send(url.as_str(), Command::List(ListCommand::Index(key, 0))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("kramer")))
+  );
+}
+
+#[test]
+fn test_lindex_missing() {
+  let (key, url) = ("test_lindex_missing", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let out = send(url.as_str(), Command::List(ListCommand::Index(key, 0))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Empty));
+}
+
+#[test]
+fn test_lrem_present() {
+  let (key, url) = ("test_lrem_present", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let ins = Command::List(ListCommand::Push(
+      (Side::Left, Insertion::Always),
+      key,
+      Arity::One("kramer"),
+    ));
+    send(url.as_str(), ins).await?;
+    let out = send(url.as_str(), Command::List(ListCommand::Rem(key, "kramer", 1))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_lrem_missing() {
+  let (key, url) = ("test_lrem_missing", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let out = send(url.as_str(), Command::List(ListCommand::Rem(key, "kramer", 1))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)));
+}
+
+#[test]
+fn test_ltrim_present() {
+  let (key, url) = ("test_ltrim_present", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let ins = Command::List(ListCommand::Push(
+      (Side::Right, Insertion::Always),
+      key,
+      Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
+    ));
+    send(url.as_str(), ins).await?;
+    send(url.as_str(), Command::List(ListCommand::Trim(key, 0, 2))).await?;
+    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("kramer")),
+      ResponseValue::String(String::from("jerry")),
+      ResponseValue::String(String::from("elaine")),
+    ])
+  );
+}
+
+#[test]
+fn test_linsert_left_present() {
+  let (key, url) = ("test_linsert_left_present", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let ins = Command::List(ListCommand::Push(
+      (Side::Right, Insertion::Always),
+      key,
+      Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
+    ));
+    send(url.as_str(), ins).await?;
+    send(
+      url.as_str(),
+      Command::List(ListCommand::Insert(key, Side::Left, "george", "newman")),
+    )
+    .await?;
+    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("kramer")),
+      ResponseValue::String(String::from("jerry")),
+      ResponseValue::String(String::from("elaine")),
+      ResponseValue::String(String::from("newman")),
+      ResponseValue::String(String::from("george")),
+    ])
+  );
+}
+
+#[test]
+fn test_linsert_right_present() {
+  let (key, url) = ("test_linsert_right_present", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let ins = Command::List(ListCommand::Push(
+      (Side::Right, Insertion::Always),
+      key,
+      Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
+    ));
+    send(url.as_str(), ins).await?;
+    send(
+      url.as_str(),
+      Command::List(ListCommand::Insert(key, Side::Right, "george", "newman")),
+    )
+    .await?;
+    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("kramer")),
+      ResponseValue::String(String::from("jerry")),
+      ResponseValue::String(String::from("elaine")),
+      ResponseValue::String(String::from("george")),
+      ResponseValue::String(String::from("newman")),
+    ])
+  );
+}
