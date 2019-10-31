@@ -18,6 +18,6 @@ See [CONTRIBUTING](/CONTRIBUTING.md).
 [async-std]: https://github.com/async-rs/async-std
 [tcp-stream]: https://docs.rs/async-std/0.99.11/async_std/net/struct.TcpStream.html
 [docs.img]: https://docs.rs/kramer/badge.svg
-[docs.url]: https://docs.rs/kramer
+[docs.url]: https://docs.rs/kramer/latest
 [crates.url]: https://crates.io/crates/kramer
 [crates.img]: https://img.shields.io/crates/v/kramer
