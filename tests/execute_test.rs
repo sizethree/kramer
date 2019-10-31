@@ -854,3 +854,59 @@ fn test_msetnx_already_exists() {
 
   assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)),);
 }
+
+#[test]
+fn test_hvals_values() {
+  let (key, url) = ("test_hvals_values", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "name", "kramer")).await?;
+    let getall = Command::Hashes(HashCommand::Vals(key));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![ResponseValue::String(String::from("kramer"))])
+  );
+}
+
+#[test]
+fn test_hstrlen_values() {
+  let (key, url) = ("test_hstrlen_values", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "name", "kramer")).await?;
+    let getall = Command::Hashes(HashCommand::StrLen(key, "name"));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(6)));
+}
+
+#[test]
+fn test_hincrby() {
+  let (key, url) = ("test_hincrby", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "episodes", "10")).await?;
+    let inc = Command::Hashes(HashCommand::Incr(key, "episodes", 10));
+    send(url.as_str(), inc).await?;
+    let result = send(
+      url.as_str(),
+      Command::Hashes(HashCommand::Get(key, Some(Arity::One("episodes")))),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("20")))
+  );
+}

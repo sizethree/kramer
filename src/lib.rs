@@ -254,14 +254,31 @@ where
   Del(S, S, Option<Arity<S>>),
   Set(S, Arity<(S, S)>, Insertion),
   Get(S, Option<Arity<S>>),
+  StrLen(S, S),
   Len(S),
+  Incr(S, S, i64),
   Keys(S),
+  Vals(S),
   Exists(S, S),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for HashCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      HashCommand::StrLen(key, field) => {
+        let tail = format!("{}{}", format_bulk_string(key), format_bulk_string(field));
+        write!(formatter, "*3\r\n$7\r\nHSTRLEN\r\n{}", tail)
+      }
+      HashCommand::Incr(key, field, amt) => {
+        let tail = format!(
+          "{}{}{}",
+          format_bulk_string(key),
+          format_bulk_string(field),
+          format_bulk_string(amt)
+        );
+        write!(formatter, "*4\r\n$7\r\nHINCRBY\r\n{}", tail)
+      }
+      HashCommand::Vals(key) => write!(formatter, "*2\r\n$5\r\nHVALS\r\n{}", format_bulk_string(key)),
       HashCommand::Keys(key) => write!(formatter, "*2\r\n$5\r\nHKEYS\r\n{}", format_bulk_string(key)),
       HashCommand::Len(key) => write!(formatter, "*2\r\n$4\r\nHLEN\r\n{}", format_bulk_string(key)),
       HashCommand::Get(key, None) => write!(formatter, "*2\r\n$7\r\nHGETALL\r\n{}", format_bulk_string(key)),
@@ -523,7 +540,7 @@ mod fmt_tests {
   use std::io::Write;
 
   #[test]
-  fn test_command_keys_fmt() {
+  fn test_keys_fmt() {
     assert_eq!(
       format!("{}", Command::Keys(String::from("*"))),
       "*2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n"
@@ -531,7 +548,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_llen_fmt() {
+  fn test_llen_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Len("kramer"))),
       "*2\r\n$4\r\nLLEN\r\n$6\r\nkramer\r\n"
@@ -539,7 +556,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_lpush_fmt() {
+  fn test_lpush_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -554,7 +571,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_rpush_fmt() {
+  fn test_rpush_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -569,7 +586,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_rpushx_fmt() {
+  fn test_rpushx_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -584,7 +601,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_lpushx_fmt() {
+  fn test_lpushx_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -599,7 +616,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_rpush_fmt_multi() {
+  fn test_rpush_fmt_multi() {
     assert_eq!(
       format!(
         "{}",
@@ -614,7 +631,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_rpop_fmt() {
+  fn test_rpop_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Pop(Side::Right, "seinfeld", None))),
       "*2\r\n$4\r\nRPOP\r\n$8\r\nseinfeld\r\n"
@@ -622,7 +639,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_lpop_fmt() {
+  fn test_lpop_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Pop(Side::Left, "seinfeld", None))),
       "*2\r\n$4\r\nLPOP\r\n$8\r\nseinfeld\r\n"
@@ -630,7 +647,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_lrange_fmt() {
+  fn test_lrange_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Range("seinfeld", 0, -1))),
       "*2\r\n$6\r\nLRANGE\r\n$8\r\nseinfeld\r\n$1\r\n0\r\n$2\r\n-1\r\n"
@@ -638,7 +655,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_brpop_timeout_fmt() {
+  fn test_brpop_timeout_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -649,7 +666,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_brpop_timeout_multi_fmt() {
+  fn test_brpop_timeout_multi_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -664,7 +681,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_brpop_timeout_multi_many_fmt() {
+  fn test_brpop_timeout_multi_many_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -679,7 +696,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_blpop_timeout_fmt() {
+  fn test_blpop_timeout_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -690,7 +707,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_blpop_timeout_multi_fmt() {
+  fn test_blpop_timeout_multi_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -705,7 +722,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_blpop_timeout_multi_many_fmt() {
+  fn test_blpop_timeout_multi_many_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -722,7 +739,7 @@ mod fmt_tests {
   /*
 
   #[test]
-  fn test_command_brpop_fmt() {
+  fn test_brpop_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::BlockPop(Side::Right, "seinfeld", 1))),
       "*3\r\n$5\r\nBRPOP\r\n$8\r\nseinfeld\r\n$1\r\n1\r\n"
@@ -731,7 +748,7 @@ mod fmt_tests {
   */
 
   #[test]
-  fn test_command_del_fmt() {
+  fn test_del_fmt() {
     assert_eq!(
       format!("{}", Command::Del(Arity::Many(vec!["kramer"]))),
       "*2\r\n$3\r\nDEL\r\n$6\r\nkramer\r\n"
@@ -739,7 +756,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_del_fmt_multi() {
+  fn test_del_fmt_multi() {
     assert_eq!(
       format!("{}", Command::Del(Arity::Many(vec!["kramer", "jerry"]))),
       "*3\r\n$3\r\nDEL\r\n$6\r\nkramer\r\n$5\r\njerry\r\n"
@@ -747,7 +764,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_set_fmt() {
+  fn test_set_fmt() {
     assert_eq!(
       format!(
         "{}",
@@ -762,7 +779,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_set_fmt_duration() {
+  fn test_set_fmt_duration() {
     assert_eq!(
       format!(
         "{}",
@@ -777,7 +794,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_set_fmt_if_not_exists() {
+  fn test_set_fmt_if_not_exists() {
     assert_eq!(
       format!(
         "{}",
@@ -792,7 +809,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_set_fmt_if_exists() {
+  fn test_set_fmt_if_exists() {
     assert_eq!(
       format!(
         "{}",
@@ -807,7 +824,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_lrem_fmt() {
+  fn test_lrem_fmt() {
     assert_eq!(
       format!("{}", Command::List(ListCommand::Rem("seinfeld", "kramer", 1))),
       "*4\r\n$4\r\nLREM\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$1\r\n1\r\n"
@@ -815,7 +832,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_get_fmt() {
+  fn test_get_fmt() {
     assert_eq!(
       format!("{}", Command::Strings(StringCommand::Get(Arity::One("seinfeld")))),
       "*2\r\n$3\r\nGET\r\n$8\r\nseinfeld\r\n"
@@ -823,7 +840,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_decr_fmt() {
+  fn test_decr_fmt() {
     assert_eq!(
       format!("{}", Command::Strings(StringCommand::Decr("seinfeld", 1))),
       "*2\r\n$4\r\nDECR\r\n$8\r\nseinfeld\r\n"
@@ -831,7 +848,7 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_command_append_fmt() {
+  fn test_append_fmt() {
     assert_eq!(
       format!("{}", Command::Strings(StringCommand::Append("seinfeld", "kramer"))),
       "*3\r\n$6\r\nAPPEND\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n"
@@ -967,6 +984,17 @@ mod fmt_tests {
   }
 
   #[test]
+  fn test_hincrby() {
+    let cmd = Command::Hashes(HashCommand::Incr("kramer", "episodes", 10));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*4\r\n$7\r\nHINCRBY\r\n$6\r\nkramer\r\n$8\r\nepisodes\r\n$2\r\n10\r\n")
+    );
+  }
+
+  #[test]
   fn test_hlen() {
     let cmd = Command::Hashes(HashCommand::Len("seinfeld"));
     let mut buffer = Vec::new();
@@ -974,6 +1002,28 @@ mod fmt_tests {
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*2\r\n$4\r\nHLEN\r\n$8\r\nseinfeld\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hvals() {
+    let cmd = Command::Hashes(HashCommand::Vals("seinfeld"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*2\r\n$5\r\nHVALS\r\n$8\r\nseinfeld\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hstrlen() {
+    let cmd = Command::Hashes(HashCommand::StrLen("seinfeld", "name"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*3\r\n$7\r\nHSTRLEN\r\n$8\r\nseinfeld\r\n$4\r\nname\r\n")
     );
   }
 
