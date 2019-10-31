@@ -180,7 +180,7 @@ pub enum StringCommand<S>
 where
   S: std::fmt::Display,
 {
-  Set(S, S, Option<std::time::Duration>, Insertion),
+  Set(Arity<(S, S)>, Option<std::time::Duration>, Insertion),
   Get(Arity<S>),
   Decr(S, usize),
   Append(S, S),
@@ -213,7 +213,7 @@ impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
         format_bulk_string(key),
         format_bulk_string(value)
       ),
-      StringCommand::Set(key, value, timeout, insertion) => {
+      StringCommand::Set(Arity::One((key, value)), timeout, insertion) => {
         let (k, v) = (format_bulk_string(key), format_bulk_string(value));
         let (cx, px) = match timeout {
           None => (0, format!("")),
@@ -228,6 +228,19 @@ impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
           Insertion::Always => (0, format!("")),
         };
         write!(formatter, "*{}\r\n$3\r\nSET\r\n{}{}{}{}", 3 + ci + cx, k, v, px, i)
+      }
+      // Timeouts are not supported with a many set.
+      StringCommand::Set(Arity::Many(assignments), _, insertion) => {
+        let count = (assignments.len() * 2) + 1;
+        let cmd = match insertion {
+          Insertion::IfNotExists => "MSETNX",
+          _ => "MSET",
+        };
+        let tail = assignments
+          .iter()
+          .map(|(k, v)| format!("{}{}", format_bulk_string(k), format_bulk_string(v)))
+          .collect::<String>();
+        write!(formatter, "*{}\r\n{}{}", count, format_bulk_string(cmd), tail)
       }
     }
   }
@@ -738,7 +751,11 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::Strings(StringCommand::Set("seinfeld", "kramer", None, Insertion::Always))
+        Command::Strings(StringCommand::Set(
+          Arity::One(("seinfeld", "kramer")),
+          None,
+          Insertion::Always
+        ))
       ),
       "*3\r\n$3\r\nSET\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n"
     );
@@ -750,8 +767,7 @@ mod fmt_tests {
       format!(
         "{}",
         Command::Strings(StringCommand::Set(
-          "seinfeld",
-          "kramer",
+          Arity::One(("seinfeld", "kramer")),
           Some(std::time::Duration::new(1, 0)),
           Insertion::Always
         ))
@@ -765,7 +781,11 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::Strings(StringCommand::Set("seinfeld", "kramer", None, Insertion::IfNotExists))
+        Command::Strings(StringCommand::Set(
+          Arity::One(("seinfeld", "kramer")),
+          None,
+          Insertion::IfNotExists
+        ))
       ),
       "*4\r\n$3\r\nSET\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$2\r\nNX\r\n"
     );
@@ -776,7 +796,11 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::Strings(StringCommand::Set("seinfeld", "kramer", None, Insertion::IfExists))
+        Command::Strings(StringCommand::Set(
+          Arity::One(("seinfeld", "kramer")),
+          None,
+          Insertion::IfExists
+        ))
       ),
       "*4\r\n$3\r\nSET\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n$2\r\nXX\r\n"
     );
@@ -909,6 +933,36 @@ mod fmt_tests {
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*2\r\n$7\r\nHGETALL\r\n$8\r\nseinfeld\r\n")
+    );
+  }
+
+  #[test]
+  fn test_mset() {
+    let cmd = Command::Strings(StringCommand::Set(
+      Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+      None,
+      Insertion::Always,
+    ));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*5\r\n$4\r\nMSET\r\n$4\r\nname\r\n$6\r\nkramer\r\n$6\r\nfriend\r\n$5\r\njerry\r\n")
+    );
+  }
+
+  #[test]
+  fn test_msetnx() {
+    let cmd = Command::Strings(StringCommand::Set(
+      Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
+      None,
+      Insertion::IfNotExists,
+    ));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*5\r\n$6\r\nMSETNX\r\n$4\r\nname\r\n$6\r\nkramer\r\n$6\r\nfriend\r\n$5\r\njerry\r\n")
     );
   }
 

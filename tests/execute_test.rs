@@ -9,6 +9,11 @@ fn set_field<S: std::fmt::Display>(key: S, field: S, value: S) -> Command<S> {
 }
 
 #[cfg(test)]
+fn arity_single_pair<S: std::fmt::Display>(key: S, value: S) -> Arity<(S, S)> {
+  Arity::One((key, value))
+}
+
+#[cfg(test)]
 fn get_redis_url() -> String {
   let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
   let port = var("REDIS_PORT").unwrap_or(String::from("6379"));
@@ -39,7 +44,7 @@ fn test_set_vanilla() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
+      Command::Strings(StringCommand::Set(Arity::One((key, "kramer")), None, Insertion::Always)),
     )
     .await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -58,7 +63,11 @@ fn test_set_if_not_exists_w_not_exists() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::IfNotExists)),
+      Command::Strings(StringCommand::Set(
+        Arity::One((key, "kramer")),
+        None,
+        Insertion::IfNotExists,
+      )),
     )
     .await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -78,12 +87,16 @@ fn test_set_if_not_exists_w_exists() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
+      Command::Strings(StringCommand::Set(Arity::One((key, "kramer")), None, Insertion::Always)),
     )
     .await?;
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(key, "jerry", None, Insertion::IfNotExists)),
+      Command::Strings(StringCommand::Set(
+        arity_single_pair(key, "jerry"),
+        None,
+        Insertion::IfNotExists,
+      )),
     )
     .await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -100,7 +113,11 @@ fn test_set_if_exists_w_not_exists() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::IfExists)),
+      Command::Strings(StringCommand::Set(
+        arity_single_pair(key, "kramer"),
+        None,
+        Insertion::IfExists,
+      )),
     )
     .await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -116,12 +133,20 @@ fn test_set_if_exists_w_exists() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(key, "kramer", None, Insertion::Always)),
+      Command::Strings(StringCommand::Set(
+        arity_single_pair(key, "kramer"),
+        None,
+        Insertion::Always,
+      )),
     )
     .await?;
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(key, "jerry", None, Insertion::IfExists)),
+      Command::Strings(StringCommand::Set(
+        arity_single_pair(key, "jerry"),
+        None,
+        Insertion::IfExists,
+      )),
     )
     .await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -141,8 +166,7 @@ fn test_set_with_duration() {
     let set_result = send(
       url.as_str(),
       Command::Strings(StringCommand::Set(
-        key,
-        "kramer",
+        arity_single_pair(key, "kramer"),
         Some(std::time::Duration::new(10, 0)),
         Insertion::Always,
       )),
@@ -434,7 +458,7 @@ fn test_decr_single() {
   let (key, url) = ("test_decr_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::Strings(StringCommand::Set(key, "3", None, Insertion::Always));
+    let push = Command::Strings(StringCommand::Set(arity_single_pair(key, "3"), None, Insertion::Always));
     send(url.as_str(), push).await?;
     let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key, 1))).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -449,7 +473,7 @@ fn test_decrby_single() {
   let (key, url) = ("test_decrby_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::Strings(StringCommand::Set(key, "3", None, Insertion::Always));
+    let push = Command::Strings(StringCommand::Set(arity_single_pair(key, "3"), None, Insertion::Always));
     send(url.as_str(), push).await?;
     let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key, 2))).await;
     send(url.as_str(), Command::Del(Arity::One(key))).await?;
@@ -741,4 +765,92 @@ fn test_hkeys_no_exists() {
   });
 
   assert_eq!(result.unwrap(), Response::Array(vec![]));
+}
+
+#[test]
+fn test_mset_many() {
+  let (one, two, url) = ("test_mset_many_1", "test_mset_many_2", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let do_set = Command::Strings(StringCommand::Set(
+      Arity::Many(vec![(one, "hello"), (two, "goodbye")]),
+      None,
+      Insertion::Always,
+    ));
+    send(url.as_str(), do_set).await?;
+    let result = send(
+      url.as_str(),
+      Command::Strings(StringCommand::Get(Arity::Many(vec![one, two]))),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("hello")),
+      ResponseValue::String(String::from("goodbye"))
+    ]),
+  );
+}
+
+#[test]
+fn test_msetnx_many() {
+  let (one, two, url) = ("test_msetnx_many_1", "test_msetnx_many_2", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let do_set = Command::Strings(StringCommand::Set(
+      Arity::Many(vec![(one, "hello"), (two, "goodbye")]),
+      None,
+      Insertion::IfNotExists,
+    ));
+    send(url.as_str(), do_set).await?;
+    let result = send(
+      url.as_str(),
+      Command::Strings(StringCommand::Get(Arity::Many(vec![one, two]))),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("hello")),
+      ResponseValue::String(String::from("goodbye"))
+    ]),
+  );
+}
+
+#[test]
+fn test_msetnx_already_exists() {
+  let (one, two, url) = (
+    "test_msetnx_alredy_exits_1",
+    "test_msetnx_already_exists_2",
+    get_redis_url(),
+  );
+
+  let result = async_std::task::block_on(async {
+    send(
+      url.as_str(),
+      Command::Strings(StringCommand::Set(Arity::One((one, "foo")), None, Insertion::Always)),
+    )
+    .await?;
+    let do_set = Command::Strings(StringCommand::Set(
+      Arity::Many(vec![(one, "hello"), (two, "goodbye")]),
+      None,
+      Insertion::IfNotExists,
+    ));
+    let result = send(url.as_str(), do_set).await;
+    send(url.as_str(), Command::Del(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)),);
 }
