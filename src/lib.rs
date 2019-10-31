@@ -780,17 +780,6 @@ mod fmt_tests {
     );
   }
 
-  /*
-
-  #[test]
-  fn test_brpop_fmt() {
-    assert_eq!(
-      format!("{}", Command::List(ListCommand::BlockPop(Side::Right, "seinfeld", 1))),
-      "*3\r\n$5\r\nBRPOP\r\n$8\r\nseinfeld\r\n$1\r\n1\r\n"
-    );
-  }
-  */
-
   #[test]
   fn test_del_fmt() {
     assert_eq!(
