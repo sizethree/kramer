@@ -229,12 +229,6 @@ where
   Strings(StringCommand<S>),
 }
 
-impl<S: std::fmt::Display> Command<S> {
-  pub fn cursor(&self) -> std::io::Cursor<String> {
-    return std::io::Cursor::new(format!("{}", self));
-  }
-}
-
 impl<S: std::fmt::Display> std::fmt::Display for Command<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
@@ -309,7 +303,7 @@ where
   S: std::fmt::Display,
   C: async_std::io::Write + async_std::io::Read + std::marker::Unpin,
 {
-  connection.write_all(format!("{}", message).as_bytes()).await?;
+  write!(connection, "{}", message).await;
 
   let mut lines = async_std::io::BufReader::new(connection).lines();
 
@@ -370,6 +364,7 @@ where
 #[cfg(test)]
 mod fmt_tests {
   use super::{Arity, Command, Insertion, ListCommand, Side, StringCommand};
+  use std::io::Write;
 
   #[test]
   fn test_command_keys_fmt() {
@@ -677,10 +672,10 @@ mod fmt_tests {
   }
 
   #[test]
-  fn test_cursor_read() {
+  fn test_macro_write() {
     let cmd = Command::Strings(StringCommand::Decr("one"));
     let mut buffer = Vec::new();
-    std::io::copy(&mut cmd.cursor(), &mut buffer).unwrap();
+    write!(buffer, "{}", cmd).expect("was able to write");
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*2\r\n$4\r\nDECR\r\n$3\r\none\r\n")
