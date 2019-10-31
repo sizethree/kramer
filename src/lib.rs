@@ -235,11 +235,49 @@ where
 {
   Del(S, S, Option<Arity<S>>),
   Set(S, Arity<(S, S)>, Insertion),
+  Get(S, Option<Arity<S>>),
+  Len(S),
+  Keys(S),
+  Exists(S, S),
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for HashCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      HashCommand::Keys(key) => write!(formatter, "*2\r\n$5\r\nHKEYS\r\n{}", format_bulk_string(key)),
+      HashCommand::Len(key) => write!(formatter, "*2\r\n$4\r\nHLEN\r\n{}", format_bulk_string(key)),
+      HashCommand::Get(key, None) => write!(formatter, "*2\r\n$7\r\nHGETALL\r\n{}", format_bulk_string(key)),
+      HashCommand::Get(key, Some(Arity::One(field))) => write!(
+        formatter,
+        "*3\r\n$4\r\nHGET\r\n{}{}",
+        format_bulk_string(key),
+        format_bulk_string(field)
+      ),
+      HashCommand::Get(key, Some(Arity::Many(fields))) => {
+        let len = fields.len();
+
+        // Awkward; Get("foo", Some(Arity::Many(vec![]))) == Get("foo", None)
+        if len == 0 {
+          let formatted = format!("{}", key);
+          return write!(formatter, "{}", HashCommand::Get(formatted, None));
+        }
+
+        let tail = fields.iter().map(format_bulk_string).collect::<String>();
+
+        write!(
+          formatter,
+          "*{}\r\n$5\r\nHMGET\r\n{}{}",
+          2 + len,
+          format_bulk_string(key),
+          tail
+        )
+      }
+      HashCommand::Exists(key, field) => write!(
+        formatter,
+        "*3\r\n$7\r\nHEXISTS\r\n{}{}",
+        format_bulk_string(key),
+        format_bulk_string(field)
+      ),
       HashCommand::Set(key, Arity::One((field, value)), Insertion::IfNotExists) => write!(
         formatter,
         "*4\r\n$6\r\nHSETNX\r\n{}{}{}",
@@ -820,6 +858,17 @@ mod fmt_tests {
   }
 
   #[test]
+  fn test_hexists() {
+    let cmd = Command::Hashes(HashCommand::Exists("seinfeld", "kramer"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*3\r\n$7\r\nHEXISTS\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n")
+    );
+  }
+
+  #[test]
   fn test_echo() {
     let cmd = Command::Echo("hello");
     let mut buffer = Vec::new();
@@ -844,6 +893,39 @@ mod fmt_tests {
       String::from(
         "*6\r\n$4\r\nHSET\r\n$8\r\nseinfeld\r\n$4\r\nname\r\n$6\r\nkramer\r\n$6\r\nfriend\r\n$5\r\njerry\r\n"
       )
+    );
+  }
+
+  #[test]
+  fn test_hgetall() {
+    let cmd = Command::Hashes(HashCommand::Get("seinfeld", None));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*2\r\n$7\r\nHGETALL\r\n$8\r\nseinfeld\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hlen() {
+    let cmd = Command::Hashes(HashCommand::Len("seinfeld"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*2\r\n$4\r\nHLEN\r\n$8\r\nseinfeld\r\n")
+    );
+  }
+
+  #[test]
+  fn test_hget() {
+    let cmd = Command::Hashes(HashCommand::Get("seinfeld", Some(Arity::One("name"))));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*3\r\n$4\r\nHGET\r\n$8\r\nseinfeld\r\n$4\r\nname\r\n")
     );
   }
 }

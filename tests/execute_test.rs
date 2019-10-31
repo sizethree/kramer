@@ -3,6 +3,12 @@ extern crate kramer;
 use kramer::{send, Arity, Command, HashCommand, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
 use std::env::var;
 
+#[cfg(test)]
+fn set_field<S: std::fmt::Display>(key: S, field: S, value: S) -> Command<S> {
+  Command::Hashes(HashCommand::Set(key, Arity::One((field, value)), Insertion::Always))
+}
+
+#[cfg(test)]
 fn get_redis_url() -> String {
   let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
   let port = var("REDIS_PORT").unwrap_or(String::from("6379"));
@@ -522,4 +528,172 @@ fn test_hsetnx_single_w_exists() {
   });
 
   assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)));
+}
+
+#[test]
+fn test_hexists_single() {
+  let (key, url) = ("test_hexists_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(
+      url.as_str(),
+      Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always)),
+    )
+    .await?;
+    let exists = Command::Hashes(HashCommand::Exists(key, "name"));
+    let result = send(url.as_str(), exists).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_hexists_not_found() {
+  let (key, url) = ("test_hexists_not_found", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let exists = Command::Hashes(HashCommand::Exists(key, "name"));
+    let result = send(url.as_str(), exists).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)));
+}
+
+#[test]
+fn test_hgetall_values() {
+  let (key, url) = ("test_hgetall_values", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "name", "kramer")).await?;
+    send(url.as_str(), set_field(key, "friend", "jerry")).await?;
+    let getall = Command::Hashes(HashCommand::Get(key, None));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("name")),
+      ResponseValue::String(String::from("kramer")),
+      ResponseValue::String(String::from("friend")),
+      ResponseValue::String(String::from("jerry")),
+    ])
+  );
+}
+
+#[test]
+fn test_hgetall_empty() {
+  let (key, url) = ("test_hgetall_empty", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let getall = Command::Hashes(HashCommand::Get(key, None));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Array(vec![]));
+}
+
+#[test]
+fn test_hget_values() {
+  let (key, url) = ("test_hget_values", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "name", "kramer")).await?;
+    let getall = Command::Hashes(HashCommand::Get(key, Some(Arity::One("name"))));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("kramer"))),
+  );
+}
+
+#[test]
+fn test_hmget_values() {
+  let (key, url) = ("test_hmget_values", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "name", "kramer")).await?;
+    send(url.as_str(), set_field(key, "friend", "jerry")).await?;
+    let getall = Command::Hashes(HashCommand::Get(key, Some(Arity::Many(vec!["name", "friend"]))));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from("kramer")),
+      ResponseValue::String(String::from("jerry"))
+    ]),
+  );
+}
+
+#[test]
+fn test_hlen_values() {
+  let (key, url) = ("test_hlen_values", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "name", "kramer")).await?;
+    let getall = Command::Hashes(HashCommand::Len(key));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_hlen_no_exists() {
+  let (key, url) = ("test_hlen_no_exists", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let hlen = Command::Hashes(HashCommand::Len(key));
+    send(url.as_str(), hlen).await
+  });
+
+  assert_eq!(result.unwrap(), Response::Item(ResponseValue::Integer(0)));
+}
+
+#[test]
+fn test_hkeys_values() {
+  let (key, url) = ("test_hkeys_values", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(url.as_str(), set_field(key, "name", "kramer")).await?;
+    let getall = Command::Hashes(HashCommand::Keys(key));
+    let result = send(url.as_str(), getall).await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    result
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![ResponseValue::String(String::from("name"))])
+  );
+}
+
+#[test]
+fn test_hkeys_no_exists() {
+  let (key, url) = ("test_hkeys_no_exists", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    let hlen = Command::Hashes(HashCommand::Keys(key));
+    send(url.as_str(), hlen).await
+  });
+
+  assert_eq!(result.unwrap(), Response::Array(vec![]));
 }
