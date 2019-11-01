@@ -1,7 +1,7 @@
 name: gh.build
 on: [push]
 jobs:
-  build:
+  beta:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -19,6 +19,37 @@ jobs:
         run: cargo build
       - name: test
         run: cargo test --features kramer-async
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: ${{ job.services.redis.ports[6379] }}
+  nightly:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: --entrypoint redis-server
+    steps:
+      - uses: actions/checkout@v1
+      - name: install-beta
+        run: rustup toolchain install nightly
+      - name: use-beta
+        run: rustup default nightly
+      - name: build
+        run: cargo build
+      - name: test
+        run: cargo test --features kramer-async
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: ${{ job.services.redis.ports[6379] }}
+      - name: bench-async
+        run: cargo bench --features kramer-async
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: ${{ job.services.redis.ports[6379] }}
+      - name: bench-sync
+        run: cargo bench
         env:
           REDIS_HOST: localhost
           REDIS_PORT: ${{ job.services.redis.ports[6379] }}
