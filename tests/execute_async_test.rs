@@ -1,4 +1,4 @@
-#![cfg(feature = "kramer-io")]
+#![cfg(feature = "kramer-async")]
 
 extern crate kramer;
 

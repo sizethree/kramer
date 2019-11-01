@@ -18,7 +18,7 @@ jobs:
       - name: build
         run: cargo build
       - name: test
-        run: cargo test --features kramer-io
+        run: cargo test --features kramer-async
         env:
           REDIS_HOST: localhost
           REDIS_PORT: ${{ job.services.redis.ports[6379] }}
