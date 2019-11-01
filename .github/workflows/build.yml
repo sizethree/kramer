@@ -3,7 +3,7 @@ on: [push]
 jobs:
   beta:
     runs-on: ubuntu-latest
-    services:
+    services: &services
       redis:
         image: redis
         ports:
@@ -19,17 +19,29 @@ jobs:
         run: cargo build
       - name: test
         run: cargo test --features kramer-async
-        env:
+        env: &redis-env
           REDIS_HOST: localhost
           REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-  nightly:
+  nightly-async:
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis
-        ports:
-          - 6379:6379
-        options: --entrypoint redis-server
+    services: *services
+    steps:
+      - uses: actions/checkout@v1
+      - name: install-beta
+        run: rustup toolchain install nightly
+      - name: use-beta
+        run: rustup default nightly
+      - name: build
+        run: cargo build
+      - name: test-async
+        run: cargo test --features kramer-async --quiet
+        env: *redis-env
+      - name: bench-async
+        run: cargo bench --features kramer-async --quiet
+        env: *redis-env
+  nightly-sync:
+    runs-on: ubuntu-latest
+    services: *services
     steps:
       - uses: actions/checkout@v1
       - name: install-beta
@@ -39,17 +51,8 @@ jobs:
       - name: build
         run: cargo build
       - name: test
-        run: cargo test --features kramer-async
-        env:
-          REDIS_HOST: localhost
-          REDIS_PORT: ${{ job.services.redis.ports[6379] }}
+        run: cargo test --quiet
+        env: *redis-env
       - name: bench-async
-        run: cargo bench --features kramer-async
-        env:
-          REDIS_HOST: localhost
-          REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-      - name: bench-sync
-        run: cargo bench
-        env:
-          REDIS_HOST: localhost
-          REDIS_PORT: ${{ job.services.redis.ports[6379] }}
+        run: cargo bench --quiet
+        env: *redis-env
