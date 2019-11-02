@@ -27,10 +27,18 @@
 //! [redis]: https://redis.io/topics/protocol
 //! [async-std]: https://github.com/async-rs/async-std
 //! [tcp-stream]: https://docs.rs/async-std/0.99.11/async_std/net/struct.TcpStream.html
-#[cfg(feature = "kramer-io")]
-mod io;
-#[cfg(feature = "kramer-io")]
-pub use io::{execute, send, Response, ResponseValue};
+mod response;
+pub use response::{Response, ResponseLine, ResponseValue};
+
+#[cfg(feature = "kramer-async")]
+mod async_io;
+#[cfg(feature = "kramer-async")]
+pub use async_io::{execute, read, send};
+
+#[cfg(not(feature = "kramer-async"))]
+mod sync_io;
+#[cfg(not(feature = "kramer-async"))]
+pub use sync_io::{execute, read, send};
 
 mod modifiers;
 use modifiers::format_bulk_string;

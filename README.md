@@ -5,8 +5,11 @@
 An implementation of the [redis protocol specification][redis] with an execution helper using the
 [`TcpStream`][tcp-stream] provided by [async-std].
 
-
 For a list of supported commands see [todo.md](/.todo.md).
+
+| kramer |
+| --- |
+| ![kramer][kramer] |
 
 ## Contributing
 
@@ -21,3 +24,4 @@ See [CONTRIBUTING](/CONTRIBUTING.md).
 [docs.url]: https://docs.rs/kramer/latest
 [crates.url]: https://crates.io/crates/kramer
 [crates.img]: https://img.shields.io/crates/v/kramer
+[kramer]: https://user-images.githubusercontent.com/1545348/68049259-d341d600-fcb8-11e9-9f25-e1bcf122cd59.gif

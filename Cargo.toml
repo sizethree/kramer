@@ -13,4 +13,4 @@ version = "^0.99"
 optional = true
 
 [features]
-kramer-io = ["async-std"]
+kramer-async = ["async-std"]
