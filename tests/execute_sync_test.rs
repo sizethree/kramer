@@ -111,3 +111,29 @@ fn test_scard() {
   execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
   assert_eq!(result, Response::Item(ResponseValue::Integer(2)));
 }
+
+#[test]
+fn test_diff_none() {
+  let (one, two) = ("test_diff_none_1", "test_diff_none_2");
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(one, Arity::One("one"))).expect("executed");
+  execute(&mut con, SetCommand::Add(two, Arity::One("two"))).expect("executed");
+  execute(&mut con, SetCommand::Add(two, Arity::One("one"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Diff(Arity::Many(vec![one, two]))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(one))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(two))).expect("executed");
+  assert_eq!(result, Response::Array(vec![]));
+}
+
+#[test]
+fn test_diff_some() {
+  let one = "test_diff_some_1";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(one, Arity::One("one"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Diff(Arity::Many(vec![one]))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(one))).expect("executed");
+  assert_eq!(
+    result,
+    Response::Array(vec![ResponseValue::String(String::from("one"))])
+  );
+}

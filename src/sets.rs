@@ -9,6 +9,7 @@ where
   Rem(S, Arity<S>),
   Card(S),
   Union(Arity<S>),
+  Diff(Arity<S>),
   Members(S),
   Pop(S, u64),
 }
@@ -17,6 +18,14 @@ impl<S: std::fmt::Display> std::fmt::Display for SetCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
     match self {
       SetCommand::Card(key) => write!(formatter, "*2\r\n$5\r\nSCARD\r\n{}", format_bulk_string(key)),
+
+      SetCommand::Diff(Arity::One(member)) => write!(formatter, "*2\r\n$5\r\nSDIFF\r\n{}", format_bulk_string(member)),
+      SetCommand::Diff(Arity::Many(members)) => {
+        let count = members.len();
+        let tail = members.iter().map(format_bulk_string).collect::<String>();
+        write!(formatter, "*{}\r\n$5\r\nSDIFF\r\n{}", count + 1, tail)
+      }
+
       SetCommand::Union(Arity::One(member)) => {
         write!(formatter, "*2\r\n$6\r\nSUNION\r\n{}", format_bulk_string(member))
       }
@@ -25,6 +34,7 @@ impl<S: std::fmt::Display> std::fmt::Display for SetCommand<S> {
         let tail = members.iter().map(format_bulk_string).collect::<String>();
         write!(formatter, "*{}\r\n$6\r\nSUNION\r\n{}", count + 1, tail)
       }
+
       SetCommand::Rem(key, Arity::One(member)) => write!(
         formatter,
         "*3\r\n$4\r\nSREM\r\n{}{}",
@@ -141,6 +151,28 @@ mod tests {
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*2\r\n$5\r\nSCARD\r\n$7\r\nseasons\r\n")
+    );
+  }
+
+  #[test]
+  fn test_sdiff_single() {
+    let cmd = SetCommand::Diff(Arity::One("one"));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*2\r\n$5\r\nSDIFF\r\n$3\r\none\r\n")
+    );
+  }
+
+  #[test]
+  fn test_sdiff_multi() {
+    let cmd = SetCommand::Diff(Arity::Many(vec!["one", "two"]));
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*3\r\n$5\r\nSDIFF\r\n$3\r\none\r\n$3\r\ntwo\r\n")
     );
   }
 }
