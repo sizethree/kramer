@@ -44,3 +44,24 @@ fn test_smembers_multi() {
     Response::Array(vec![ResponseValue::String(String::from("one")),])
   );
 }
+
+#[test]
+fn test_srem_single() {
+  let key = "test_srem_single";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(key, Arity::One("one"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Rem(key, Arity::One("one"))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
+  assert_eq!(result, Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_srem_multi() {
+  let key = "test_srem_multi";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(key, Arity::One("one"))).expect("executed");
+  execute(&mut con, SetCommand::Add(key, Arity::One("two"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Rem(key, Arity::Many(vec!["one", "two"]))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
+  assert_eq!(result, Response::Item(ResponseValue::Integer(2)));
+}
