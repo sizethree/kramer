@@ -47,6 +47,9 @@ pub use modifiers::{Arity, Insertion, Side};
 mod lists;
 pub use lists::ListCommand;
 
+mod sets;
+pub use sets::SetCommand;
+
 mod strings;
 pub use strings::StringCommand;
 
@@ -64,6 +67,7 @@ where
   List(ListCommand<S>),
   Strings(StringCommand<S>),
   Hashes(HashCommand<S>),
+  Sets(SetCommand<S>),
   Echo(S),
 }
 
@@ -87,6 +91,7 @@ impl<S: std::fmt::Display> std::fmt::Display for Command<S> {
       Command::List(list_command) => write!(formatter, "{}", list_command),
       Command::Strings(string_command) => write!(formatter, "{}", string_command),
       Command::Hashes(hash_command) => write!(formatter, "{}", hash_command),
+      Command::Sets(set_command) => write!(formatter, "{}", set_command),
     }
   }
 }
