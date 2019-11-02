@@ -35,15 +35,12 @@ fn test_sadd_multi() {
 fn test_smembers_multi() {
   let key = "test_smembers_multi";
   let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
-  execute(&mut con, SetCommand::Add(key, Arity::Many(vec!["one", "two"]))).expect("executed");
+  execute(&mut con, SetCommand::Add(key, Arity::Many(vec!["one"]))).expect("executed");
   let cmd = SetCommand::Members(key);
   let result = execute(&mut con, cmd).expect("executed");
   execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
   assert_eq!(
     result,
-    Response::Array(vec![
-      ResponseValue::String(String::from("two")),
-      ResponseValue::String(String::from("one")),
-    ])
+    Response::Array(vec![ResponseValue::String(String::from("one")),])
   );
 }
