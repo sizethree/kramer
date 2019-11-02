@@ -2,7 +2,11 @@
 
 extern crate kramer;
 
-use kramer::{send, Arity, Command, HashCommand, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand};
+use async_std::prelude::*;
+
+use kramer::{
+  read, send, Arity, Command, HashCommand, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand,
+};
 use std::env::var;
 
 #[cfg(test)]
@@ -181,6 +185,76 @@ fn test_set_with_duration() {
     result.unwrap(),
     Response::Item(ResponseValue::String(String::from("OK")))
   )
+}
+
+#[test]
+fn test_blpush_single() {
+  let (key, url) = ("test_lpush_single", get_redis_url());
+
+  let result = async_std::task::block_on(async {
+    send(
+      url.as_str(),
+      Command::List(ListCommand::Push(
+        (Side::Left, Insertion::Always),
+        key,
+        Arity::One("kramer"),
+      )),
+    )
+    .await?;
+    let out = send(
+      url.as_str(),
+      Command::List(ListCommand::Pop(Side::Left, key, Some((None, 0)))),
+    )
+    .await;
+    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    out
+  });
+
+  assert_eq!(
+    result.unwrap(),
+    Response::Array(vec![
+      ResponseValue::String(String::from(key)),
+      ResponseValue::String(String::from("kramer"))
+    ])
+  );
+}
+
+#[test]
+fn test_blpush_blocking() {
+  let (key, url) = ("test_lpush_blocking", get_redis_url());
+
+  let handle = async_std::task::spawn(async {
+    let cmd = Command::List(ListCommand::Pop(Side::Left, "test_lpush_blocking", Some((None, 0))));
+    let url = get_redis_url();
+    let dest = url.as_str();
+    let mut con = async_std::net::TcpStream::connect(dest).await.expect("foo");
+    let f = format!("{}", cmd);
+    con.write_all(f.as_bytes()).await.expect("wrote command");
+    read(con).await.expect("read response from redis")
+  });
+
+  async_std::task::block_on(async {
+    send(
+      url.as_str(),
+      Command::List(ListCommand::Push(
+        (Side::Left, Insertion::Always),
+        key,
+        Arity::One("kramer"),
+      )),
+    )
+    .await
+    .expect("pushed");
+  });
+
+  let result = async_std::task::block_on(handle);
+
+  assert_eq!(
+    result,
+    Response::Array(vec![
+      ResponseValue::String(String::from(key)),
+      ResponseValue::String(String::from("kramer"))
+    ])
+  );
 }
 
 #[test]
