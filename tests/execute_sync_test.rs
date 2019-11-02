@@ -65,3 +65,38 @@ fn test_srem_multi() {
   execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
   assert_eq!(result, Response::Item(ResponseValue::Integer(2)));
 }
+
+#[test]
+fn test_union_single() {
+  let key = "test_union_single";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(key, Arity::One("one"))).expect("executed");
+  execute(&mut con, SetCommand::Add(key, Arity::One("two"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Union(Arity::One(key))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
+  assert_eq!(
+    result,
+    Response::Array(vec![
+      ResponseValue::String(String::from("one")),
+      ResponseValue::String(String::from("two")),
+    ])
+  );
+}
+
+#[test]
+fn test_union_multi() {
+  let (one, two) = ("test_union_multi_1", "test_union_multi_2");
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(one, Arity::One("one"))).expect("executed");
+  execute(&mut con, SetCommand::Add(two, Arity::One("two"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Union(Arity::Many(vec![one, two]))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(one))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(two))).expect("executed");
+  assert_eq!(
+    result,
+    Response::Array(vec![
+      ResponseValue::String(String::from("two")),
+      ResponseValue::String(String::from("one")),
+    ])
+  );
+}

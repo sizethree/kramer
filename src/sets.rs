@@ -7,6 +7,7 @@ where
 {
   Add(S, Arity<S>),
   Rem(S, Arity<S>),
+  Union(Arity<S>),
   Members(S),
   Pop(S, u64),
 }
@@ -14,6 +15,14 @@ where
 impl<S: std::fmt::Display> std::fmt::Display for SetCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
     match self {
+      SetCommand::Union(Arity::One(member)) => {
+        write!(formatter, "*2\r\n$6\r\nSUNION\r\n{}", format_bulk_string(member))
+      }
+      SetCommand::Union(Arity::Many(members)) => {
+        let count = members.len();
+        let tail = members.iter().map(format_bulk_string).collect::<String>();
+        write!(formatter, "*{}\r\n$6\r\nSUNION\r\n{}", count + 1, tail)
+      }
       SetCommand::Rem(key, Arity::One(member)) => write!(
         formatter,
         "*3\r\n$4\r\nSREM\r\n{}{}",
