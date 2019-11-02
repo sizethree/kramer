@@ -100,3 +100,14 @@ fn test_union_multi() {
     ])
   );
 }
+
+#[test]
+fn test_scard() {
+  let key = "test_scard";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(key, Arity::One("one"))).expect("executed");
+  execute(&mut con, SetCommand::Add(key, Arity::One("two"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Card(key)).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
+  assert_eq!(result, Response::Item(ResponseValue::Integer(2)));
+}

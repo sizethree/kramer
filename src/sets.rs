@@ -7,6 +7,7 @@ where
 {
   Add(S, Arity<S>),
   Rem(S, Arity<S>),
+  Card(S),
   Union(Arity<S>),
   Members(S),
   Pop(S, u64),
@@ -15,6 +16,7 @@ where
 impl<S: std::fmt::Display> std::fmt::Display for SetCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
     match self {
+      SetCommand::Card(key) => write!(formatter, "*2\r\n$5\r\nSCARD\r\n{}", format_bulk_string(key)),
       SetCommand::Union(Arity::One(member)) => {
         write!(formatter, "*2\r\n$6\r\nSUNION\r\n{}", format_bulk_string(member))
       }
@@ -128,6 +130,17 @@ mod tests {
     assert_eq!(
       String::from_utf8(buffer).unwrap(),
       String::from("*4\r\n$4\r\nSREM\r\n$7\r\nseasons\r\n$3\r\none\r\n$3\r\ntwo\r\n")
+    );
+  }
+
+  #[test]
+  fn test_scard_multi() {
+    let cmd = SetCommand::Card("seasons");
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*2\r\n$5\r\nSCARD\r\n$7\r\nseasons\r\n")
     );
   }
 }
