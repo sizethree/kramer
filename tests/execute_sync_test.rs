@@ -137,3 +137,49 @@ fn test_diff_some() {
     Response::Array(vec![ResponseValue::String(String::from("one"))])
   );
 }
+
+#[test]
+fn test_ismember_some() {
+  let key = "test_ismember_some";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(key, Arity::One("one"))).expect("executed");
+  let result = execute(&mut con, SetCommand::IsMember(key, "one")).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
+  assert_eq!(result, Response::Item(ResponseValue::Integer(1)));
+}
+
+#[test]
+fn test_ismember_none() {
+  let key = "test_ismember_none";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  let result = execute(&mut con, SetCommand::IsMember(key, "one")).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
+  assert_eq!(result, Response::Item(ResponseValue::Integer(0)));
+}
+
+#[test]
+fn test_inter_none() {
+  let (one, two) = ("test_inter_none_1", "test_inter_none_2");
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(one, Arity::One("one"))).expect("executed");
+  execute(&mut con, SetCommand::Add(two, Arity::One("two"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Inter(Arity::Many(vec![one, two]))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(one))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(two))).expect("executed");
+  assert_eq!(result, Response::Array(vec![]));
+}
+
+#[test]
+fn test_inter_some() {
+  let (one, two) = ("test_inter_some_1", "test_inter_some_2");
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(&mut con, SetCommand::Add(one, Arity::One("one"))).expect("executed");
+  execute(&mut con, SetCommand::Add(two, Arity::One("one"))).expect("executed");
+  let result = execute(&mut con, SetCommand::Inter(Arity::Many(vec![one, two]))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(one))).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(two))).expect("executed");
+  assert_eq!(
+    result,
+    Response::Array(vec![ResponseValue::String(String::from("one"))])
+  );
+}
