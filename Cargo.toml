@@ -6,7 +6,8 @@ edition = "2018"
 license = "MIT"
 homepage = "https://github.com/sizethree/kramer"
 repository = "https://github.com/sizethree/kramer.git"
-description = "Redis communication"
+description = "Enumerated types implementing std::fmt::Display for sending RESP messages to redis."
+keywords = ["redis"]
 
 [dependencies.async-std]
 version = "^0.99"
