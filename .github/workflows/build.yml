@@ -53,9 +53,9 @@ jobs:
         options: --entrypoint redis-server
     steps:
       - uses: actions/checkout@v1
-      - name: install-beta
+      - name: install-nightly
         run: rustup toolchain install nightly
-      - name: use-beta
+      - name: use-nightly
         run: rustup default nightly
       - name: build
         run: cargo build
@@ -79,9 +79,9 @@ jobs:
         options: --entrypoint redis-server
     steps:
       - uses: actions/checkout@v1
-      - name: install-beta
+      - name: install-nightly
         run: rustup toolchain install nightly
-      - name: use-beta
+      - name: use-nightly
         run: rustup default nightly
       - name: build
         run: cargo build --features kramer-async
