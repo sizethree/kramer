@@ -7,6 +7,7 @@ where
 {
   Set(Arity<(S, S)>, Option<std::time::Duration>, Insertion),
   Get(Arity<S>),
+  Len(S),
   Decr(S, usize),
   Incr(S, i64),
   Append(S, S),
@@ -15,6 +16,7 @@ where
 impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      StringCommand::Len(key) => write!(formatter, "*2\r\n$6\r\nSTRLEN\r\n{}", format_bulk_string(key)),
       StringCommand::Incr(key, 1) => write!(formatter, "*2\r\n$4\r\nINCR\r\n{}", format_bulk_string(key)),
       StringCommand::Incr(key, amt) => write!(
         formatter,
@@ -71,5 +73,22 @@ impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
         write!(formatter, "*{}\r\n{}{}", count, format_bulk_string(cmd), tail)
       }
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::StringCommand;
+  use std::io::prelude::*;
+
+  #[test]
+  fn tes_strlen_present() {
+    let cmd = StringCommand::Len("seinfeld");
+    let mut buffer = Vec::new();
+    write!(buffer, "{}", cmd).expect("was able to write");
+    assert_eq!(
+      String::from_utf8(buffer).unwrap(),
+      String::from("*2\r\n$6\r\nSTRLEN\r\n$8\r\nseinfeld\r\n")
+    );
   }
 }

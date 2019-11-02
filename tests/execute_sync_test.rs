@@ -1,7 +1,7 @@
 #![cfg(not(feature = "kramer-async"))]
 extern crate kramer;
 
-use kramer::{execute, Arity, Command, Response, ResponseValue, SetCommand};
+use kramer::{execute, Arity, Command, Insertion, Response, ResponseValue, SetCommand, StringCommand};
 use std::env::var;
 
 #[cfg(test)]
@@ -9,6 +9,20 @@ fn get_redis_url() -> String {
   let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
   let port = var("REDIS_PORT").unwrap_or(String::from("6379"));
   format!("{}:{}", host, port)
+}
+
+#[test]
+fn test_strlen_present() {
+  let key = "test_strlen_present";
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  execute(
+    &mut con,
+    StringCommand::Set(Arity::One((key, "seinfeld")), None, Insertion::Always),
+  )
+  .expect("executed");
+  let result = execute(&mut con, StringCommand::Len(key)).expect("executed");
+  execute(&mut con, Command::Del(Arity::One(key))).expect("executed");
+  assert_eq!(result, Response::Item(ResponseValue::Integer(8)));
 }
 
 #[test]
