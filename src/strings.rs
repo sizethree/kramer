@@ -83,10 +83,19 @@ where
 
 #[cfg(test)]
 mod tests {
-  use super::StringCommand;
+  use super::{Arity, Insertion, StringCommand};
 
   #[test]
-  fn tes_strlen_present() {
+  fn test_set_present() {
+    let cmd = StringCommand::Set(Arity::One(("month", 11)), None, Insertion::Always);
+    assert_eq!(
+      format!("{}", cmd),
+      String::from("*3\r\n$3\r\nSET\r\n$5\r\nmonth\r\n$2\r\n11\r\n")
+    );
+  }
+
+  #[test]
+  fn test_strlen_present() {
     let cmd = StringCommand::Len::<_, &str>("seinfeld");
     assert_eq!(
       format!("{}", cmd),
