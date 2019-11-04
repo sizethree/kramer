@@ -65,7 +65,7 @@ where
   Keys(S),
   Del(Arity<S>),
   Exists(Arity<S>),
-  List(ListCommand<S>),
+  List(ListCommand<S, V>),
   Strings(StringCommand<S>),
   Hashes(HashCommand<S, V>),
   Sets(SetCommand<S, V>),
