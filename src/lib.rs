@@ -67,7 +67,7 @@ where
   Exists(Arity<S>),
   List(ListCommand<S>),
   Strings(StringCommand<S>),
-  Hashes(HashCommand<S>),
+  Hashes(HashCommand<S, V>),
   Sets(SetCommand<S, V>),
   Echo(S),
 }

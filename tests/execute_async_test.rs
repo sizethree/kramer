@@ -10,8 +10,8 @@ use kramer::{
 use std::env::var;
 
 #[cfg(test)]
-fn set_field<S: std::fmt::Display>(key: S, field: S, value: S) -> Command<S, String> {
-  Command::Hashes::<_, String>(HashCommand::Set(key, Arity::One((field, value)), Insertion::Always))
+fn set_field<S: std::fmt::Display>(key: S, field: S, value: S) -> Command<S, S> {
+  Command::Hashes::<_, _>(HashCommand::Set(key, Arity::One((field, value)), Insertion::Always))
 }
 
 #[cfg(test)]
