@@ -1,22 +1,27 @@
 use crate::modifiers::{format_bulk_string, Arity};
 
 #[derive(Debug)]
-pub enum SetCommand<S>
+pub enum SetCommand<S, V>
 where
   S: std::fmt::Display,
+  V: std::fmt::Display,
 {
-  Add(S, Arity<S>),
-  Rem(S, Arity<S>),
+  Add(S, Arity<V>),
+  Rem(S, Arity<V>),
   Card(S),
   Union(Arity<S>),
   Inter(Arity<S>),
-  IsMember(S, S),
+  IsMember(S, V),
   Diff(Arity<S>),
   Members(S),
   Pop(S, u64),
 }
 
-impl<S: std::fmt::Display> std::fmt::Display for SetCommand<S> {
+impl<S, V> std::fmt::Display for SetCommand<S, V>
+where
+  S: std::fmt::Display,
+  V: std::fmt::Display,
+{
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
     match self {
       SetCommand::Card(key) => write!(formatter, "*2\r\n$5\r\nSCARD\r\n{}", format_bulk_string(key)),
@@ -107,33 +112,27 @@ mod tests {
 
   #[test]
   fn test_sadd_single() {
-    let cmd = SetCommand::Add("seasons", Arity::One("one"));
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
+    let cmd = SetCommand::Add::<_, &str>("seasons", Arity::One("one"));
     assert_eq!(
-      String::from_utf8(buffer).unwrap(),
+      format!("{}", cmd),
       String::from("*3\r\n$4\r\nSADD\r\n$7\r\nseasons\r\n$3\r\none\r\n")
     );
   }
 
   #[test]
   fn test_sadd_multi() {
-    let cmd = SetCommand::Add("seasons", Arity::Many(vec!["one", "two"]));
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
+    let cmd = SetCommand::Add::<_, &str>("seasons", Arity::Many(vec!["one", "two"]));
     assert_eq!(
-      String::from_utf8(buffer).unwrap(),
+      format!("{}", cmd),
       String::from("*4\r\n$4\r\nSADD\r\n$7\r\nseasons\r\n$3\r\none\r\n$3\r\ntwo\r\n")
     );
   }
 
   #[test]
   fn test_smembers_multi() {
-    let cmd = SetCommand::Members("seasons");
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
+    let cmd = SetCommand::Members::<_, &str>("seasons");
     assert_eq!(
-      String::from_utf8(buffer).unwrap(),
+      format!("{}", cmd),
       String::from("*2\r\n$8\r\nSMEMBERS\r\n$7\r\nseasons\r\n")
     );
   }
@@ -141,10 +140,8 @@ mod tests {
   #[test]
   fn test_srem_single() {
     let cmd = SetCommand::Rem("seasons", Arity::One("one"));
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
     assert_eq!(
-      String::from_utf8(buffer).unwrap(),
+      format!("{}", cmd),
       String::from("*3\r\n$4\r\nSREM\r\n$7\r\nseasons\r\n$3\r\none\r\n")
     );
   }
@@ -162,7 +159,7 @@ mod tests {
 
   #[test]
   fn test_scard_multi() {
-    let cmd = SetCommand::Card("seasons");
+    let cmd = SetCommand::Card::<_, &str>("seasons");
     let mut buffer = Vec::new();
     write!(buffer, "{}", cmd).expect("was able to write");
     assert_eq!(
@@ -173,7 +170,7 @@ mod tests {
 
   #[test]
   fn test_sdiff_single() {
-    let cmd = SetCommand::Diff(Arity::One("one"));
+    let cmd = SetCommand::Diff::<_, &str>(Arity::One("one"));
     let mut buffer = Vec::new();
     write!(buffer, "{}", cmd).expect("was able to write");
     assert_eq!(
@@ -184,33 +181,24 @@ mod tests {
 
   #[test]
   fn test_sinter_single() {
-    let cmd = SetCommand::Inter(Arity::One("some"));
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
-    assert_eq!(
-      String::from_utf8(buffer).unwrap(),
-      String::from("*2\r\n$6\r\nSINTER\r\n$4\r\nsome\r\n")
-    );
+    let cmd = SetCommand::Inter::<_, &str>(Arity::One("some"));
+    assert_eq!(format!("{}", cmd), String::from("*2\r\n$6\r\nSINTER\r\n$4\r\nsome\r\n"));
   }
 
   #[test]
   fn test_sinter_multi() {
-    let cmd = SetCommand::Inter(Arity::Many(vec!["one", "two"]));
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
+    let cmd = SetCommand::Inter::<_, &str>(Arity::Many(vec!["one", "two"]));
     assert_eq!(
-      String::from_utf8(buffer).unwrap(),
+      format!("{}", cmd),
       String::from("*3\r\n$6\r\nSINTER\r\n$3\r\none\r\n$3\r\ntwo\r\n")
     );
   }
 
   #[test]
   fn test_sdiff_multi() {
-    let cmd = SetCommand::Diff(Arity::Many(vec!["one", "two"]));
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
+    let cmd = SetCommand::Diff::<_, &str>(Arity::Many(vec!["one", "two"]));
     assert_eq!(
-      String::from_utf8(buffer).unwrap(),
+      format!("{}", cmd),
       String::from("*3\r\n$5\r\nSDIFF\r\n$3\r\none\r\n$3\r\ntwo\r\n")
     );
   }

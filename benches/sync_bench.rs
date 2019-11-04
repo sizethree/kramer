@@ -20,7 +20,7 @@ fn bench_kramer_set_del_sync(b: &mut Bencher) {
     let mut stream = std::net::TcpStream::connect(get_redis_url()).expect("connected");
     let set_cmd = StringCommand::Set(Arity::One((key, "42")), None, Insertion::Always);
     execute(&mut stream, set_cmd).expect("written");
-    let del_cmd = Command::Del(Arity::One(key));
+    let del_cmd = Command::Del::<_, &str>(Arity::One(key));
     execute(&mut stream, del_cmd).expect("written");
     Ok::<(), std::io::Error>(())
   });

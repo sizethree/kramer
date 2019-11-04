@@ -26,7 +26,7 @@ fn bench_kramer_set_del_async(b: &mut Bencher) {
         .expect("connected");
       let set_cmd = StringCommand::Set(Arity::One((key, "42")), None, Insertion::Always);
       execute(&mut stream, set_cmd).await.expect("written");
-      let del_cmd = Command::Del(Arity::One(key));
+      let del_cmd = Command::Del::<_, &str>(Arity::One(key));
       execute(&mut stream, del_cmd).await.expect("written");
       Ok::<(), std::io::Error>(())
     })
@@ -59,7 +59,7 @@ fn bench_kramer_set_operations_async(b: &mut Bencher) {
         .await
         .expect("written");
 
-      let result = execute(&mut stream, SetCommand::Inter(Arity::Many(vec![one, two])))
+      let result = execute(&mut stream, SetCommand::Inter::<_, &str>(Arity::Many(vec![one, two])))
         .await
         .expect("written");
 
@@ -68,7 +68,7 @@ fn bench_kramer_set_operations_async(b: &mut Bencher) {
         Response::Array(vec![ResponseValue::String(String::from("kramer"))])
       );
 
-      execute(&mut stream, Command::Del(Arity::Many(vec![one, two])))
+      execute(&mut stream, Command::Del::<_, &str>(Arity::Many(vec![one, two])))
         .await
         .expect("written");
       Ok::<(), std::io::Error>(())
