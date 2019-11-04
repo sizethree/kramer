@@ -1,19 +1,24 @@
 use crate::modifiers::{format_bulk_string, Arity, Insertion};
 
 #[derive(Debug)]
-pub enum StringCommand<S>
+pub enum StringCommand<S, V>
 where
   S: std::fmt::Display,
+  V: std::fmt::Display,
 {
-  Set(Arity<(S, S)>, Option<std::time::Duration>, Insertion),
+  Set(Arity<(S, V)>, Option<std::time::Duration>, Insertion),
   Get(Arity<S>),
   Len(S),
   Decr(S, usize),
   Incr(S, i64),
-  Append(S, S),
+  Append(S, V),
 }
 
-impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
+impl<S, V> std::fmt::Display for StringCommand<S, V>
+where
+  S: std::fmt::Display,
+  V: std::fmt::Display,
+{
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
       StringCommand::Len(key) => write!(formatter, "*2\r\n$6\r\nSTRLEN\r\n{}", format_bulk_string(key)),
@@ -78,16 +83,22 @@ impl<S: std::fmt::Display> std::fmt::Display for StringCommand<S> {
 
 #[cfg(test)]
 mod tests {
-  use super::StringCommand;
-  use std::io::prelude::*;
+  use super::{Arity, Insertion, StringCommand};
 
   #[test]
-  fn tes_strlen_present() {
-    let cmd = StringCommand::Len("seinfeld");
-    let mut buffer = Vec::new();
-    write!(buffer, "{}", cmd).expect("was able to write");
+  fn test_set_present() {
+    let cmd = StringCommand::Set(Arity::One(("month", 11)), None, Insertion::Always);
     assert_eq!(
-      String::from_utf8(buffer).unwrap(),
+      format!("{}", cmd),
+      String::from("*3\r\n$3\r\nSET\r\n$5\r\nmonth\r\n$2\r\n11\r\n")
+    );
+  }
+
+  #[test]
+  fn test_strlen_present() {
+    let cmd = StringCommand::Len::<_, &str>("seinfeld");
+    assert_eq!(
+      format!("{}", cmd),
       String::from("*2\r\n$6\r\nSTRLEN\r\n$8\r\nseinfeld\r\n")
     );
   }

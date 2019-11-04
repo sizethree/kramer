@@ -1,12 +1,13 @@
 use crate::modifiers::{format_bulk_string, Arity, Insertion};
 
 #[derive(Debug)]
-pub enum HashCommand<S>
+pub enum HashCommand<S, V>
 where
   S: std::fmt::Display,
+  V: std::fmt::Display,
 {
   Del(S, Arity<S>),
-  Set(S, Arity<(S, S)>, Insertion),
+  Set(S, Arity<(S, V)>, Insertion),
   Get(S, Option<Arity<S>>),
   StrLen(S, S),
   Len(S),
@@ -16,7 +17,11 @@ where
   Exists(S, S),
 }
 
-impl<S: std::fmt::Display> std::fmt::Display for HashCommand<S> {
+impl<S, V> std::fmt::Display for HashCommand<S, V>
+where
+  S: std::fmt::Display,
+  V: std::fmt::Display,
+{
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
       HashCommand::StrLen(key, field) => {
@@ -48,7 +53,7 @@ impl<S: std::fmt::Display> std::fmt::Display for HashCommand<S> {
         // Awkward; Get("foo", Some(Arity::Many(vec![]))) == Get("foo", None)
         if len == 0 {
           let formatted = format!("{}", key);
-          return write!(formatter, "{}", HashCommand::Get(formatted, None));
+          return write!(formatter, "{}", HashCommand::Get::<_, &str>(formatted, None));
         }
 
         let tail = fields.iter().map(format_bulk_string).collect::<String>();

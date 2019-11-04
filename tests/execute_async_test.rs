@@ -10,8 +10,8 @@ use kramer::{
 use std::env::var;
 
 #[cfg(test)]
-fn set_field<S: std::fmt::Display>(key: S, field: S, value: S) -> Command<S> {
-  Command::Hashes(HashCommand::Set(key, Arity::One((field, value)), Insertion::Always))
+fn set_field<S: std::fmt::Display>(key: S, field: S, value: S) -> Command<S, S> {
+  Command::Hashes::<_, _>(HashCommand::Set(key, Arity::One((field, value)), Insertion::Always))
 }
 
 #[cfg(test)]
@@ -29,7 +29,7 @@ fn get_redis_url() -> String {
 #[test]
 fn test_echo() {
   let url = get_redis_url();
-  let result = async_std::task::block_on(send(url.as_str(), Command::Echo("hello")));
+  let result = async_std::task::block_on(send(url.as_str(), Command::Echo::<_, &str>("hello")));
   assert_eq!(
     result.unwrap(),
     Response::Item(ResponseValue::String("hello".to_string()))
@@ -39,7 +39,7 @@ fn test_echo() {
 #[test]
 fn test_send_keys() {
   let url = get_redis_url();
-  let result = async_std::task::block_on(send(url.as_str(), Command::Keys("*")));
+  let result = async_std::task::block_on(send(url.as_str(), Command::Keys::<_, &str>("*")));
   assert!(result.is_ok());
 }
 
@@ -50,10 +50,10 @@ fn test_set_vanilla() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(Arity::One((key, "kramer")), None, Insertion::Always)),
+      Command::Strings::<_, &str>(StringCommand::Set(Arity::One((key, "kramer")), None, Insertion::Always)),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
   assert_eq!(
@@ -69,14 +69,14 @@ fn test_set_if_not_exists_w_not_exists() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(
+      Command::Strings::<_, &str>(StringCommand::Set(
         Arity::One((key, "kramer")),
         None,
         Insertion::IfNotExists,
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
   assert_eq!(
@@ -93,19 +93,19 @@ fn test_set_if_not_exists_w_exists() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(Arity::One((key, "kramer")), None, Insertion::Always)),
+      Command::Strings::<_, &str>(StringCommand::Set(Arity::One((key, "kramer")), None, Insertion::Always)),
     )
     .await?;
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(
+      Command::Strings::<_, &str>(StringCommand::Set(
         arity_single_pair(key, "jerry"),
         None,
         Insertion::IfNotExists,
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
   assert_eq!(result.unwrap(), Response::Item(ResponseValue::Empty));
@@ -119,14 +119,14 @@ fn test_set_if_exists_w_not_exists() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(
+      Command::Strings::<_, &str>(StringCommand::Set(
         arity_single_pair(key, "kramer"),
         None,
         Insertion::IfExists,
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
   assert_eq!(result.unwrap(), Response::Item(ResponseValue::Empty));
@@ -139,7 +139,7 @@ fn test_set_if_exists_w_exists() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(
+      Command::Strings::<_, &str>(StringCommand::Set(
         arity_single_pair(key, "kramer"),
         None,
         Insertion::Always,
@@ -148,14 +148,14 @@ fn test_set_if_exists_w_exists() {
     .await?;
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(
+      Command::Strings::<_, &str>(StringCommand::Set(
         arity_single_pair(key, "jerry"),
         None,
         Insertion::IfExists,
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
   assert_eq!(
@@ -171,14 +171,14 @@ fn test_set_with_duration() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(
+      Command::Strings::<_, &str>(StringCommand::Set(
         arity_single_pair(key, "kramer"),
         Some(std::time::Duration::new(10, 0)),
         Insertion::Always,
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
   assert_eq!(
@@ -194,7 +194,7 @@ fn test_blpush_single() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -203,10 +203,10 @@ fn test_blpush_single() {
     .await?;
     let out = send(
       url.as_str(),
-      Command::List(ListCommand::Pop(Side::Left, key, Some((None, 0)))),
+      Command::List::<_, &str>(ListCommand::Pop(Side::Left, key, Some((None, 0)))),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -224,7 +224,7 @@ fn test_blpush_blocking() {
   let (key, url) = ("test_lpush_blocking", get_redis_url());
 
   let handle = async_std::task::spawn(async {
-    let cmd = Command::List(ListCommand::Pop(Side::Left, "test_lpush_blocking", Some((None, 0))));
+    let cmd = Command::List::<_, &str>(ListCommand::Pop(Side::Left, "test_lpush_blocking", Some((None, 0))));
     let url = get_redis_url();
     let dest = url.as_str();
     let mut con = async_std::net::TcpStream::connect(dest).await.expect("foo");
@@ -236,7 +236,7 @@ fn test_blpush_blocking() {
   async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -264,14 +264,14 @@ fn test_lpush_single() {
   let result = async_std::task::block_on(async {
     let out = send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -283,14 +283,14 @@ fn test_llen_single() {
   let (key, url) = ("test_llen_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List(ListCommand::Push(
+    let ins = Command::List::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
     ));
     send(url.as_str(), ins).await?;
-    let result = send(url.as_str(), Command::List(ListCommand::Len(key))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let result = send(url.as_str(), Command::List::<_, &str>(ListCommand::Len(key))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -304,14 +304,14 @@ fn test_lpush_multi() {
   let result = async_std::task::block_on(async {
     let out = send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::Many(vec!["kramer", "jerry"]),
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -325,14 +325,14 @@ fn test_lpushx_single_w_no_exists() {
   let result = async_std::task::block_on(async {
     let out = send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::IfExists),
         key,
         Arity::One("kramer"),
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -346,7 +346,7 @@ fn test_lpushx_single_w_exists() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -355,14 +355,14 @@ fn test_lpushx_single_w_exists() {
     .await?;
     let out = send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::IfExists),
         key,
         Arity::One("kramer"),
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -376,14 +376,14 @@ fn test_rpush_single() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Right, Insertion::Always),
         key,
         Arity::One("kramer"),
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
 
@@ -395,14 +395,18 @@ fn test_lpop_single() {
   let (key, url) = ("test_lpop_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::List(ListCommand::Push(
+    let push = Command::List::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry"]),
     ));
     send(url.as_str(), push).await?;
-    let result = send(url.as_str(), Command::List(ListCommand::Pop(Side::Left, key, None))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let result = send(
+      url.as_str(),
+      Command::List::<_, &str>(ListCommand::Pop(Side::Left, key, None)),
+    )
+    .await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -417,14 +421,18 @@ fn test_rpop_single() {
   let (key, url) = ("test_rpop_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::List(ListCommand::Push(
+    let push = Command::List::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry"]),
     ));
     send(url.as_str(), push).await?;
-    let result = send(url.as_str(), Command::List(ListCommand::Pop(Side::Right, key, None))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let result = send(
+      url.as_str(),
+      Command::List::<_, &str>(ListCommand::Pop(Side::Right, key, None)),
+    )
+    .await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -441,14 +449,14 @@ fn test_rpush_multiple() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::List(ListCommand::Push(
+      Command::List::<_, &str>(ListCommand::Push(
         (Side::Right, Insertion::Always),
         key,
         Arity::Many(vec!["kramer", "jerry"]),
       )),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
 
@@ -460,8 +468,12 @@ fn test_append() {
   let (key, url) = ("test_append", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let set_result = send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let set_result = send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Append(key, "jerry")),
+    )
+    .await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     set_result
   });
 
@@ -473,9 +485,17 @@ fn test_get() {
   let (key, url) = ("test_get", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await?;
-    let result = send(url.as_str(), Command::Strings(StringCommand::Get(Arity::One(key)))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Append(key, "jerry")),
+    )
+    .await?;
+    let result = send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Get(Arity::One(key))),
+    )
+    .await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -490,10 +510,22 @@ fn test_get_multi_append() {
   let (key, url) = ("test_get_multi_append", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    send(url.as_str(), Command::Strings(StringCommand::Append(key, "jerry"))).await?;
-    send(url.as_str(), Command::Strings(StringCommand::Append(key, "kramer"))).await?;
-    let result = send(url.as_str(), Command::Strings(StringCommand::Get(Arity::One(key)))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Append(key, "jerry")),
+    )
+    .await?;
+    send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Append(key, "kramer")),
+    )
+    .await?;
+    let result = send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Get(Arity::One(key))),
+    )
+    .await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -508,15 +540,23 @@ fn test_multi_get() {
   let (one, two, url) = ("test_multi_get_1", "test_multi_get_2", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    send(url.as_str(), Command::Strings(StringCommand::Append(one, "jerry"))).await?;
-    send(url.as_str(), Command::Strings(StringCommand::Append(two, "kramer"))).await?;
+    send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Append(one, "jerry")),
+    )
+    .await?;
+    send(
+      url.as_str(),
+      Command::Strings::<_, &str>(StringCommand::Append(two, "kramer")),
+    )
+    .await?;
     let result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Get(Arity::Many(vec![one, two]))),
+      Command::Strings::<_, &str>(StringCommand::Get(Arity::Many(vec![one, two]))),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(one))).await?;
-    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(two))).await?;
     result
   });
 
@@ -534,10 +574,10 @@ fn test_decr_single() {
   let (key, url) = ("test_decr_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::Strings(StringCommand::Set(arity_single_pair(key, "3"), None, Insertion::Always));
+    let push = Command::Strings::<_, &str>(StringCommand::Set(arity_single_pair(key, "3"), None, Insertion::Always));
     send(url.as_str(), push).await?;
-    let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key, 1))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let result = send(url.as_str(), Command::Strings::<_, &str>(StringCommand::Decr(key, 1))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -549,10 +589,10 @@ fn test_decrby_single() {
   let (key, url) = ("test_decrby_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::Strings(StringCommand::Set(arity_single_pair(key, "3"), None, Insertion::Always));
+    let push = Command::Strings::<_, &str>(StringCommand::Set(arity_single_pair(key, "3"), None, Insertion::Always));
     send(url.as_str(), push).await?;
-    let result = send(url.as_str(), Command::Strings(StringCommand::Decr(key, 2))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let result = send(url.as_str(), Command::Strings::<_, &str>(StringCommand::Decr(key, 2))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -564,9 +604,9 @@ fn test_hset_single() {
   let (key, url) = ("test_hset_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let do_set = Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always));
+    let do_set = Command::Hashes::<_, &str>(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always));
     let result = send(url.as_str(), do_set).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -578,13 +618,13 @@ fn test_hset_multi() {
   let (key, url) = ("test_hset_multi", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let do_set = Command::Hashes(HashCommand::Set(
+    let do_set = Command::Hashes::<_, &str>(HashCommand::Set(
       key,
       Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
       Insertion::Always,
     ));
     let result = send(url.as_str(), do_set).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -598,12 +638,12 @@ fn test_hdel_single() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always)),
+      Command::Hashes::<_, &str>(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always)),
     )
     .await?;
-    let del = Command::Hashes(HashCommand::Del(key, Arity::One("name")));
+    let del = Command::Hashes::<_, &str>(HashCommand::Del(key, Arity::One("name")));
     let result = send(url.as_str(), del).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -617,16 +657,16 @@ fn test_hdel_multi() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Hashes(HashCommand::Set(
+      Command::Hashes::<_, &str>(HashCommand::Set(
         key,
         Arity::Many(vec![("name", "kramer"), ("friend", "jerry")]),
         Insertion::Always,
       )),
     )
     .await?;
-    let del = Command::Hashes(HashCommand::Del(key, Arity::Many(vec!["name", "friend", "foo"])));
+    let del = Command::Hashes::<_, &str>(HashCommand::Del(key, Arity::Many(vec!["name", "friend", "foo"])));
     let result = send(url.as_str(), del).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -638,13 +678,13 @@ fn test_hsetnx_single_w_no_exists() {
   let (key, url) = ("test_hsetnx_single_w_no_exists", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let do_set = Command::Hashes(HashCommand::Set(
+    let do_set = Command::Hashes::<_, &str>(HashCommand::Set(
       key,
       Arity::One(("name", "kramer")),
       Insertion::IfNotExists,
     ));
     let result = send(url.as_str(), do_set).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -656,15 +696,15 @@ fn test_hsetnx_single_w_exists() {
   let (key, url) = ("test_hsetnx_single_w_exists", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let pre_set = Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always));
+    let pre_set = Command::Hashes::<_, &str>(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always));
     send(url.as_str(), pre_set).await?;
-    let do_set = Command::Hashes(HashCommand::Set(
+    let do_set = Command::Hashes::<_, &str>(HashCommand::Set(
       key,
       Arity::One(("name", "kramer")),
       Insertion::IfNotExists,
     ));
     let result = send(url.as_str(), do_set).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -678,12 +718,12 @@ fn test_hexists_single() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Hashes(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always)),
+      Command::Hashes::<_, &str>(HashCommand::Set(key, Arity::One(("name", "kramer")), Insertion::Always)),
     )
     .await?;
-    let exists = Command::Hashes(HashCommand::Exists(key, "name"));
+    let exists = Command::Hashes::<_, &str>(HashCommand::Exists(key, "name"));
     let result = send(url.as_str(), exists).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -695,9 +735,9 @@ fn test_hexists_not_found() {
   let (key, url) = ("test_hexists_not_found", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let exists = Command::Hashes(HashCommand::Exists(key, "name"));
+    let exists = Command::Hashes::<_, &str>(HashCommand::Exists(key, "name"));
     let result = send(url.as_str(), exists).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -711,9 +751,9 @@ fn test_hgetall_values() {
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "name", "kramer")).await?;
     send(url.as_str(), set_field(key, "friend", "jerry")).await?;
-    let getall = Command::Hashes(HashCommand::Get(key, None));
+    let getall = Command::Hashes::<_, &str>(HashCommand::Get(key, None));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -733,9 +773,9 @@ fn test_hgetall_empty() {
   let (key, url) = ("test_hgetall_empty", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let getall = Command::Hashes(HashCommand::Get(key, None));
+    let getall = Command::Hashes::<_, &str>(HashCommand::Get(key, None));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -748,9 +788,9 @@ fn test_hget_values() {
 
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "name", "kramer")).await?;
-    let getall = Command::Hashes(HashCommand::Get(key, Some(Arity::One("name"))));
+    let getall = Command::Hashes::<_, &str>(HashCommand::Get(key, Some(Arity::One("name"))));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -767,9 +807,9 @@ fn test_hmget_values() {
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "name", "kramer")).await?;
     send(url.as_str(), set_field(key, "friend", "jerry")).await?;
-    let getall = Command::Hashes(HashCommand::Get(key, Some(Arity::Many(vec!["name", "friend"]))));
+    let getall = Command::Hashes::<_, &str>(HashCommand::Get(key, Some(Arity::Many(vec!["name", "friend"]))));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -788,9 +828,9 @@ fn test_hlen_values() {
 
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "name", "kramer")).await?;
-    let getall = Command::Hashes(HashCommand::Len(key));
+    let getall = Command::Hashes::<_, &str>(HashCommand::Len(key));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -802,7 +842,7 @@ fn test_hlen_no_exists() {
   let (key, url) = ("test_hlen_no_exists", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let hlen = Command::Hashes(HashCommand::Len(key));
+    let hlen = Command::Hashes::<_, &str>(HashCommand::Len(key));
     send(url.as_str(), hlen).await
   });
 
@@ -815,9 +855,9 @@ fn test_hkeys_values() {
 
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "name", "kramer")).await?;
-    let getall = Command::Hashes(HashCommand::Keys(key));
+    let getall = Command::Hashes::<_, &str>(HashCommand::Keys(key));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -832,7 +872,7 @@ fn test_hkeys_no_exists() {
   let (key, url) = ("test_hkeys_no_exists", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let hlen = Command::Hashes(HashCommand::Keys(key));
+    let hlen = Command::Hashes::<_, &str>(HashCommand::Keys(key));
     send(url.as_str(), hlen).await
   });
 
@@ -844,7 +884,7 @@ fn test_mset_many() {
   let (one, two, url) = ("test_mset_many_1", "test_mset_many_2", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let do_set = Command::Strings(StringCommand::Set(
+    let do_set = Command::Strings::<_, &str>(StringCommand::Set(
       Arity::Many(vec![(one, "hello"), (two, "goodbye")]),
       None,
       Insertion::Always,
@@ -852,11 +892,11 @@ fn test_mset_many() {
     send(url.as_str(), do_set).await?;
     let result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Get(Arity::Many(vec![one, two]))),
+      Command::Strings::<_, &str>(StringCommand::Get(Arity::Many(vec![one, two]))),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(one))).await?;
-    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(two))).await?;
     result
   });
 
@@ -874,7 +914,7 @@ fn test_msetnx_many() {
   let (one, two, url) = ("test_msetnx_many_1", "test_msetnx_many_2", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let do_set = Command::Strings(StringCommand::Set(
+    let do_set = Command::Strings::<_, &str>(StringCommand::Set(
       Arity::Many(vec![(one, "hello"), (two, "goodbye")]),
       None,
       Insertion::IfNotExists,
@@ -882,11 +922,11 @@ fn test_msetnx_many() {
     send(url.as_str(), do_set).await?;
     let result = send(
       url.as_str(),
-      Command::Strings(StringCommand::Get(Arity::Many(vec![one, two]))),
+      Command::Strings::<_, &str>(StringCommand::Get(Arity::Many(vec![one, two]))),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(one))).await?;
-    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(two))).await?;
     result
   });
 
@@ -910,17 +950,17 @@ fn test_msetnx_already_exists() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::Strings(StringCommand::Set(Arity::One((one, "foo")), None, Insertion::Always)),
+      Command::Strings::<_, &str>(StringCommand::Set(Arity::One((one, "foo")), None, Insertion::Always)),
     )
     .await?;
-    let do_set = Command::Strings(StringCommand::Set(
+    let do_set = Command::Strings::<_, &str>(StringCommand::Set(
       Arity::Many(vec![(one, "hello"), (two, "goodbye")]),
       None,
       Insertion::IfNotExists,
     ));
     let result = send(url.as_str(), do_set).await;
-    send(url.as_str(), Command::Del(Arity::One(one))).await?;
-    send(url.as_str(), Command::Del(Arity::One(two))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(one))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(two))).await?;
     result
   });
 
@@ -933,9 +973,9 @@ fn test_hvals_values() {
 
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "name", "kramer")).await?;
-    let getall = Command::Hashes(HashCommand::Vals(key));
+    let getall = Command::Hashes::<_, &str>(HashCommand::Vals(key));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -951,9 +991,9 @@ fn test_hstrlen_values() {
 
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "name", "kramer")).await?;
-    let getall = Command::Hashes(HashCommand::StrLen(key, "name"));
+    let getall = Command::Hashes::<_, &str>(HashCommand::StrLen(key, "name"));
     let result = send(url.as_str(), getall).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -966,14 +1006,14 @@ fn test_hincrby() {
 
   let result = async_std::task::block_on(async {
     send(url.as_str(), set_field(key, "episodes", "10")).await?;
-    let inc = Command::Hashes(HashCommand::Incr(key, "episodes", 10));
+    let inc = Command::Hashes::<_, &str>(HashCommand::Incr(key, "episodes", 10));
     send(url.as_str(), inc).await?;
     let result = send(
       url.as_str(),
-      Command::Hashes(HashCommand::Get(key, Some(Arity::One("episodes")))),
+      Command::Hashes::<_, &str>(HashCommand::Get(key, Some(Arity::One("episodes")))),
     )
     .await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
 
@@ -988,14 +1028,14 @@ fn test_lrange() {
   let (key, url) = ("test_lrange", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List(ListCommand::Push(
+    let ins = Command::List::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
     ));
     send(url.as_str(), ins).await?;
-    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -1010,14 +1050,14 @@ fn test_lindex_present() {
   let (key, url) = ("test_lindex_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List(ListCommand::Push(
+    let ins = Command::List::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
     ));
     send(url.as_str(), ins).await?;
-    let out = send(url.as_str(), Command::List(ListCommand::Index(key, 0))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Index(key, 0))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -1032,8 +1072,8 @@ fn test_lindex_missing() {
   let (key, url) = ("test_lindex_missing", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let out = send(url.as_str(), Command::List(ListCommand::Index(key, 0))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Index(key, 0))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -1045,14 +1085,18 @@ fn test_lrem_present() {
   let (key, url) = ("test_lrem_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List(ListCommand::Push(
+    let ins = Command::List::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
     ));
     send(url.as_str(), ins).await?;
-    let out = send(url.as_str(), Command::List(ListCommand::Rem(key, "kramer", 1))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let out = send(
+      url.as_str(),
+      Command::List::<_, &str>(ListCommand::Rem(key, "kramer", 1)),
+    )
+    .await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -1064,8 +1108,12 @@ fn test_lrem_missing() {
   let (key, url) = ("test_lrem_missing", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let out = send(url.as_str(), Command::List(ListCommand::Rem(key, "kramer", 1))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let out = send(
+      url.as_str(),
+      Command::List::<_, &str>(ListCommand::Rem(key, "kramer", 1)),
+    )
+    .await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -1077,15 +1125,15 @@ fn test_ltrim_present() {
   let (key, url) = ("test_ltrim_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List(ListCommand::Push(
+    let ins = Command::List::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
     ));
     send(url.as_str(), ins).await?;
-    send(url.as_str(), Command::List(ListCommand::Trim(key, 0, 2))).await?;
-    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::List::<_, &str>(ListCommand::Trim(key, 0, 2))).await?;
+    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -1104,7 +1152,7 @@ fn test_linsert_left_present() {
   let (key, url) = ("test_linsert_left_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List(ListCommand::Push(
+    let ins = Command::List::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
@@ -1112,11 +1160,11 @@ fn test_linsert_left_present() {
     send(url.as_str(), ins).await?;
     send(
       url.as_str(),
-      Command::List(ListCommand::Insert(key, Side::Left, "george", "newman")),
+      Command::List::<_, &str>(ListCommand::Insert(key, Side::Left, "george", "newman")),
     )
     .await?;
-    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 
@@ -1150,7 +1198,7 @@ fn test_linsert_right_present() {
     )
     .await?;
     let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
-    send(url.as_str(), Command::Del(Arity::One(key))).await?;
+    send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
 

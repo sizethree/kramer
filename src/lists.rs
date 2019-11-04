@@ -1,22 +1,27 @@
 use crate::modifiers::{format_bulk_string, Arity, Insertion, Side};
 
 #[derive(Debug)]
-pub enum ListCommand<S>
+pub enum ListCommand<S, V>
 where
   S: std::fmt::Display,
+  V: std::fmt::Display,
 {
   Len(S),
-  Push((Side, Insertion), S, Arity<S>),
+  Push((Side, Insertion), S, Arity<V>),
   Pop(Side, S, Option<(Option<Arity<S>>, u64)>),
-  Rem(S, S, u64),
+  Rem(S, V, u64),
   Index(S, i64),
-  Set(S, u64, S),
-  Insert(S, Side, S, S),
+  Set(S, u64, V),
+  Insert(S, Side, V, V),
   Trim(S, i64, i64),
   Range(S, i64, i64),
 }
 
-impl<S: std::fmt::Display> std::fmt::Display for ListCommand<S> {
+impl<S, V> std::fmt::Display for ListCommand<S, V>
+where
+  S: std::fmt::Display,
+  V: std::fmt::Display,
+{
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
       ListCommand::Trim(key, start, stop) => {
