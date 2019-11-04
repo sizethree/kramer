@@ -20,7 +20,7 @@ fn test_strlen_present() {
     StringCommand::Set(Arity::One((key, "seinfeld")), None, Insertion::Always),
   )
   .expect("executed");
-  let result = execute(&mut con, StringCommand::Len(key)).expect("executed");
+  let result = execute(&mut con, StringCommand::Len::<_, &str>(key)).expect("executed");
   execute(&mut con, Command::Del::<_, &str>(Arity::One(key))).expect("executed");
   assert_eq!(result, Response::Item(ResponseValue::Integer(8)));
 }
