@@ -1,7 +1,7 @@
 name: gh.build
 on: [push]
 jobs:
-  beta-sync:
+  stable-sync:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -11,10 +11,10 @@ jobs:
         options: --entrypoint redis-server
     steps:
       - uses: actions/checkout@v1
-      - name: install-beta
-        run: rustup toolchain install beta
-      - name: use-beta
-        run: rustup default beta
+      - name: install-stable
+        run: rustup toolchain install stable
+      - name: use-stable
+        run: rustup default stable
       - name: build-sync
         run: cargo build
       - name: test-sync
@@ -22,7 +22,7 @@ jobs:
         env:
           REDIS_HOST: localhost
           REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-  beta-async:
+  stable-async:
     runs-on: ubuntu-latest
     services:
       redis:
@@ -32,10 +32,10 @@ jobs:
         options: --entrypoint redis-server
     steps:
       - uses: actions/checkout@v1
-      - name: install-beta
-        run: rustup toolchain install beta
-      - name: use-beta
-        run: rustup default beta
+      - name: install-latest
+        run: rustup toolchain install stable
+      - name: use-stable
+        run: rustup default stable
       - name: build-async
         run: cargo build --features kramer-async
       - name: test-async
