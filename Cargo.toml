@@ -1,6 +1,6 @@
 [package]
 name = "kramer"
-version = "0.3.0"
+version = "1.0.0"
 authors = ["Danny Hadley <dadleyy@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -10,7 +10,7 @@ description = "Enumerated types implementing std::fmt::Display for sending RESP 
 keywords = ["redis"]
 
 [dependencies.async-std]
-version = "^0.99"
+version = "^1.0"
 optional = true
 
 [features]
