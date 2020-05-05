@@ -64,9 +64,9 @@ where
 pub async fn execute<C, S>(mut connection: C, message: S) -> Result<Response, Error>
 where
   S: std::fmt::Display,
-  C: async_std::io::Write + async_std::io::Read + std::marker::Unpin,
+  C: async_std::io::Write + std::marker::Unpin + async_std::io::Read,
 {
-  write!(connection, "{}", message).await?;
+  connection.write_all(format!("{}", message).as_bytes()).await?;
   read(connection).await
 }
 

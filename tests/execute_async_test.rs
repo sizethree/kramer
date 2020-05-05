@@ -5,7 +5,8 @@ extern crate kramer;
 use async_std::prelude::*;
 
 use kramer::{
-  read, send, Arity, Command, HashCommand, Insertion, ListCommand, Response, ResponseValue, Side, StringCommand,
+  execute, read, send, Arity, Command, HashCommand, Insertion, ListCommand, Response, ResponseValue, Side,
+  StringCommand,
 };
 use std::env::var;
 
@@ -33,6 +34,66 @@ fn test_echo() {
   assert_eq!(
     result.unwrap(),
     Response::Item(ResponseValue::String("hello".to_string()))
+  );
+}
+
+#[test]
+fn test_execute() {
+  let url = get_redis_url();
+  let result = async_std::task::block_on(async {
+    let mut stream = async_std::net::TcpStream::connect(url).await?;
+    execute(&mut stream, Command::Echo::<_, &str>("hello")).await
+  });
+  assert_eq!(result.is_ok(), true);
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("hello")))
+  );
+}
+#[test]
+fn test_execute_arc() {
+  let url = get_redis_url();
+  let stream = async_std::task::block_on(async_std::net::TcpStream::connect(url)).unwrap();
+  let arc = async_std::sync::Arc::new(async_std::sync::Mutex::new(stream));
+
+  let result = async_std::task::block_on(async {
+    let (a, b) = (arc.clone(), arc.clone());
+
+    let one = async_std::task::spawn(async move {
+      let mut conn = a.lock().await;
+      execute(&mut (*conn), Command::Echo::<_, &str>("hello")).await
+    });
+
+    let two = async_std::task::spawn(async move {
+      let mut conn = b.lock().await;
+      execute(&mut (*conn), Command::Echo::<_, &str>("world")).await
+    });
+
+    (one.await.unwrap(), two.await.unwrap())
+  });
+
+  assert_eq!(
+    result,
+    (
+      Response::Item(ResponseValue::String(String::from("hello"))),
+      Response::Item(ResponseValue::String(String::from("world")))
+    )
+  );
+}
+
+#[test]
+fn test_execute_nested() {
+  let result = async_std::task::block_on(async {
+    async_std::task::spawn(async {
+      let url = get_redis_url();
+      send(url.as_str(), Command::Echo::<_, &str>("hello")).await
+    })
+    .await
+  });
+  assert_eq!(result.is_ok(), true);
+  assert_eq!(
+    result.unwrap(),
+    Response::Item(ResponseValue::String(String::from("hello")))
   );
 }
 
