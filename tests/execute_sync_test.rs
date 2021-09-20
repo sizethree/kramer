@@ -1,7 +1,7 @@
 #![cfg(not(feature = "kramer-async"))]
 extern crate kramer;
 
-use kramer::{execute, Arity, Command, Insertion, Response, ResponseValue, SetCommand, StringCommand};
+use kramer::{execute, Arity, AuthCredentials, Command, Insertion, Response, ResponseValue, SetCommand, StringCommand};
 use std::env::var;
 
 #[cfg(test)]
@@ -9,6 +9,21 @@ fn get_redis_url() -> String {
   let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
   let port = var("REDIS_PORT").unwrap_or(String::from("6379"));
   format!("{}:{}", host, port)
+}
+
+// TODO: figure out how to run this in CI; would need to consider how to set password without potentially affecting
+// other tests. Might consider a second redis container with auth configured.
+#[test]
+#[ignore]
+fn sync_test_auth_password() {
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  let password = var("REDIS_PASSWORD").unwrap_or_default();
+  let result = execute(
+    &mut con,
+    Command::Auth::<String, String>(AuthCredentials::Password(password)),
+  )
+  .expect("executed");
+  assert_eq!(result, Response::Item(ResponseValue::String("OK".into())));
 }
 
 #[test]

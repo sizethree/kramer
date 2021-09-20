@@ -57,6 +57,32 @@ mod hashes;
 pub use hashes::HashCommand;
 
 #[derive(Debug)]
+pub enum AuthCredentials<S>
+where
+  S: std::fmt::Display,
+{
+  Password(S),
+  User((S, S)),
+}
+
+impl<S> std::fmt::Display for AuthCredentials<S>
+where
+  S: std::fmt::Display,
+{
+  fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    match self {
+      AuthCredentials::Password(value) => write!(formatter, "*2\r\n$4\r\nAUTH\r\n{}", format_bulk_string(value)),
+      AuthCredentials::User((username, password)) => write!(
+        formatter,
+        "*3\r\n$4\r\nAUTH\r\n{}{}",
+        format_bulk_string(username),
+        format_bulk_string(password)
+      ),
+    }
+  }
+}
+
+#[derive(Debug)]
 pub enum Command<S, V>
 where
   S: std::fmt::Display,
@@ -70,6 +96,7 @@ where
   Hashes(HashCommand<S, V>),
   Sets(SetCommand<S, V>),
   Echo(S),
+  Auth(AuthCredentials<S>),
 }
 
 impl<S, V> std::fmt::Display for Command<S, V>
@@ -79,6 +106,7 @@ where
 {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      Command::Auth(method) => write!(formatter, "{}", method),
       Command::Echo(value) => write!(formatter, "*2\r\n$4\r\nECHO\r\n{}", format_bulk_string(value)),
       Command::Keys(value) => write!(formatter, "*2\r\n$4\r\nKEYS\r\n{}", format_bulk_string(value)),
       Command::Exists(Arity::Many(values)) => {
@@ -103,7 +131,7 @@ where
 
 #[cfg(test)]
 mod fmt_tests {
-  use super::{Arity, Command, HashCommand, Insertion, ListCommand, Side, StringCommand};
+  use super::{Arity, AuthCredentials, Command, HashCommand, Insertion, ListCommand, Side, StringCommand};
   use std::io::Write;
 
   #[test]
@@ -472,6 +500,24 @@ mod fmt_tests {
     assert_eq!(
       format!("{}", cmd),
       String::from("*3\r\n$7\r\nHEXISTS\r\n$8\r\nseinfeld\r\n$6\r\nkramer\r\n")
+    );
+  }
+
+  #[test]
+  fn test_auth_password() {
+    let cmd = Command::Auth::<&str, &str>(AuthCredentials::Password("hello-world"));
+    assert_eq!(
+      format!("{}", cmd),
+      String::from("*2\r\n$4\r\nAUTH\r\n$11\r\nhello-world\r\n")
+    );
+  }
+
+  #[test]
+  fn test_auth_user() {
+    let cmd = Command::Auth::<&str, &str>(AuthCredentials::User(("kramer", "hello-world")));
+    assert_eq!(
+      format!("{}", cmd),
+      String::from("*3\r\n$4\r\nAUTH\r\n$6\r\nkramer\r\n$11\r\nhello-world\r\n")
     );
   }
 

@@ -50,6 +50,7 @@ fn test_execute() {
     Response::Item(ResponseValue::String(String::from("hello")))
   );
 }
+
 #[test]
 fn test_execute_arc() {
   let url = get_redis_url();
