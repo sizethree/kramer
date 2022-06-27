@@ -42,10 +42,15 @@ pub use sync_io::{execute, read, send};
 
 mod modifiers;
 use modifiers::format_bulk_string;
-pub use modifiers::{Arity, Insertion, Side};
+pub use modifiers::{humanize_command, Arity, Insertion, Side};
 
 mod lists;
 pub use lists::ListCommand;
+
+#[cfg(feature = "acl")]
+pub mod acl;
+#[cfg(feature = "acl")]
+pub use acl::{AclCommand, SetUser};
 
 mod sets;
 pub use sets::SetCommand;
@@ -97,6 +102,9 @@ where
   Sets(SetCommand<S, V>),
   Echo(S),
   Auth(AuthCredentials<S>),
+
+  #[cfg(feature = "acl")]
+  Acl(AclCommand<S>),
 }
 
 impl<S, V> std::fmt::Display for Command<S, V>
@@ -106,6 +114,9 @@ where
 {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      #[cfg(feature = "acl")]
+      Command::Acl(acl_command) => write!(formatter, "{}", acl_command),
+
       Command::Auth(method) => write!(formatter, "{}", method),
       Command::Echo(value) => write!(formatter, "*2\r\n$4\r\nECHO\r\n{}", format_bulk_string(value)),
       Command::Keys(value) => write!(formatter, "*2\r\n$4\r\nKEYS\r\n{}", format_bulk_string(value)),
