@@ -94,7 +94,7 @@ mod tests {
       keys: Some("books"),
     });
 
-    assert_eq!(format!("{}", command), "*6\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$14\r\nlibrary-member\r\n$2\r\non\r\n$11\r\n>many-books\r\n$6\r\n~books\r\n$8\r\n+hgetall\r\n");
+    assert_eq!(format!("{}", command), "*7\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$14\r\nlibrary-member\r\n$2\r\non\r\n$11\r\n>many-books\r\n$6\r\n~books\r\n$8\r\n+hgetall\r\n");
     assert_eq!(
       humanize_command::<&str, &str>(&crate::Command::Acl(command)),
       "ACL SETUSER library-member on >many-books ~books +hgetall"
