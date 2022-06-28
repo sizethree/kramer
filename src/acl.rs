@@ -62,16 +62,16 @@ where
         )
       }
       AclCommand::SetUser(inner) => match (&inner.password, &inner.commands, &inner.keys) {
-        (Some(p), Some(c), Some(k)) => {
+        (Some(password), Some(command_pattern), Some(key_pattern)) => {
           write!(
             formatter,
-            "*6\r\n$3\r\nACL\r\n{}{}{}{}{}{}",
+            "*7\r\n$3\r\nACL\r\n{}{}{}{}{}{}",
             format_bulk_string("SETUSER"),
             format_bulk_string(&inner.name),
             format_bulk_string("on"),
-            format_bulk_string(format!(">{}", p)),
-            format_bulk_string(format!("~{}", k)),
-            format_bulk_string(format!("+{}", c)),
+            format_bulk_string(format!(">{password}")),
+            format_bulk_string(format!("~{key_pattern}")),
+            format_bulk_string(format!("+{command_pattern}")),
           )
         }
         (_, _, _) => Ok(()),
