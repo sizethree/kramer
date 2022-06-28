@@ -11,7 +11,7 @@
 //!
 //! [`SETUSER` docs](https://redis.io/commands/acl-setuser/)
 
-use super::modifiers::format_bulk_string;
+use super::modifiers::{format_bulk_string, Arity};
 
 /// Notice: Currently `Display` is only implemented if all fields are present/`Some`.
 #[cfg(feature = "acl")]
@@ -33,6 +33,7 @@ where
   S: std::fmt::Display,
 {
   SetUser(SetUser<S>),
+  DelUser(Arity<S>),
 }
 
 #[cfg(feature = "acl")]
@@ -42,6 +43,24 @@ where
 {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      AclCommand::DelUser(Arity::One(inner)) => {
+        write!(
+          formatter,
+          "*3\r\n$3\r\nACL\r\n{}{}",
+          format_bulk_string("DELUSER"),
+          format_bulk_string(inner)
+        )
+      }
+      AclCommand::DelUser(Arity::Many(inner)) => {
+        let amount = 2 + inner.len();
+        write!(
+          formatter,
+          "*{}\r\n$3\r\nACL\r\n{}{}",
+          amount,
+          format_bulk_string("DELUSER"),
+          inner.iter().map(format_bulk_string).collect::<String>(),
+        )
+      }
       AclCommand::SetUser(inner) => match (&inner.password, &inner.commands, &inner.keys) {
         (Some(p), Some(c), Some(k)) => {
           write!(
@@ -64,6 +83,7 @@ where
 #[cfg(test)]
 mod tests {
   use super::{AclCommand, SetUser};
+  use crate::modifiers::{humanize_command, Arity};
 
   #[test]
   fn format_full_setuser() {
@@ -75,6 +95,35 @@ mod tests {
     });
 
     assert_eq!(format!("{}", command), "*6\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$14\r\nlibrary-member\r\n$2\r\non\r\n$11\r\n>many-books\r\n$8\r\n+hgetall\r\n$6\r\n~books\r\n");
+  }
+
+  #[test]
+  fn format_deluser_one() {
+    let command = AclCommand::DelUser(Arity::One("my-user"));
+
+    assert_eq!(
+      format!("{}", command),
+      "*3\r\n$3\r\nACL\r\n$7\r\nDELUSER\r\n$7\r\nmy-user\r\n"
+    );
+
+    assert_eq!(
+      humanize_command::<&str, &str>(&crate::Command::Acl(command)),
+      "ACL DELUSER my-user"
+    );
+  }
+
+  #[test]
+  fn format_deluser_many() {
+    let command = AclCommand::DelUser(Arity::Many(vec!["my-user", "other-user"]));
+
+    assert_eq!(
+      format!("{}", command),
+      "*4\r\n$3\r\nACL\r\n$7\r\nDELUSER\r\n$7\r\nmy-user\r\n$10\r\nother-user\r\n"
+    );
+    assert_eq!(
+      humanize_command::<&str, &str>(&crate::Command::Acl(command)),
+      "ACL DELUSER my-user other-user"
+    );
   }
 
   #[test]
