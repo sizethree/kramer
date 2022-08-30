@@ -15,7 +15,12 @@ where
 {
   let mut lines = async_std::io::BufReader::new(connection).lines();
 
-  match readline(lines.next().await) {
+  match lines
+    .next()
+    .await
+    .ok_or_else(|| Error::new(ErrorKind::InvalidData, "kramer: no line available to parse."))
+    .and_then(|res| res.and_then(readline))
+  {
     Ok(ResponseLine::Array(size)) => {
       let mut store = Vec::with_capacity(size);
 
@@ -23,7 +28,12 @@ where
         return Ok(Response::Array(vec![]));
       }
 
-      while let Ok(kind) = readline(lines.next().await) {
+      while let Ok(kind) = lines
+        .next()
+        .await
+        .ok_or_else(|| Error::new(ErrorKind::InvalidData, "kramer: missing line during array parsing."))
+        .and_then(|res| res.and_then(readline))
+      {
         match kind {
           ResponseLine::BulkString(size) => match lines.next().await {
             Some(Ok(bulky)) if bulky.len() == size => {
@@ -46,10 +56,12 @@ where
         return Ok(Response::Item(ResponseValue::Empty));
       }
 
-      let out = lines
-        .next()
-        .await
-        .ok_or_else(|| Error::new(ErrorKind::Other, "no line to work with"))??;
+      let out = lines.next().await.ok_or_else(|| {
+        Error::new(
+          ErrorKind::InvalidData,
+          "kramer: expected line from bulk string but received nothing",
+        )
+      })??;
 
       Ok(Response::Item(ResponseValue::String(out)))
     }

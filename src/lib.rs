@@ -1,3 +1,5 @@
+#![warn(clippy::missing_docs_in_private_items)]
+
 //! An implementation of the [redis protocol specification][redis] with an execution helper using
 //! the [`TcpStream`][tcp-stream] provided by [async-std].
 //!
@@ -27,46 +29,61 @@
 //! [redis]: https://redis.io/topics/protocol
 //! [async-std]: https://github.com/async-rs/async-std
 //! [tcp-stream]: https://docs.rs/async-std/0.99.11/async_std/net/struct.TcpStream.html
+
+/// The response module contains parsing logic for redis responses.
 mod response;
 pub use response::{Response, ResponseLine, ResponseValue};
 
+/// Our async_io module uses async-std.
 #[cfg(feature = "kramer-async")]
 mod async_io;
 #[cfg(feature = "kramer-async")]
 pub use async_io::{execute, read, send};
 
+/// Our sync_io module uses methods directly from ruststd.
 #[cfg(not(feature = "kramer-async"))]
 mod sync_io;
 #[cfg(not(feature = "kramer-async"))]
 pub use sync_io::{execute, read, send};
 
+/// To consolidate the variants of any given command, this module exposes generic and common
+/// enumerations that extend the reason of any given enum.
 mod modifiers;
 use modifiers::format_bulk_string;
 pub use modifiers::{humanize_command, Arity, Insertion, Side};
 
+/// List related enums.
 mod lists;
 pub use lists::ListCommand;
 
+/// ACL related enums.
 #[cfg(feature = "acl")]
 pub mod acl;
 #[cfg(feature = "acl")]
 pub use acl::{AclCommand, SetUser};
 
+/// Set related enums.
 mod sets;
 pub use sets::SetCommand;
 
+/// String related enums.
 mod strings;
 pub use strings::StringCommand;
 
+/// Hash related enums.
 mod hashes;
 pub use hashes::HashCommand;
 
+/// Redis authorization supports password and user/password authorization schemes.
 #[derive(Debug)]
 pub enum AuthCredentials<S>
 where
   S: std::fmt::Display,
 {
+  /// Builds an AUTH command with only a password.
   Password(S),
+
+  /// Builds an AUTH command with a password and a user.
   User((S, S)),
 }
 
@@ -87,20 +104,39 @@ where
   }
 }
 
+/// The main `Command` enum here represents all of the different variants of redis commands
+/// that are supported by the library.
 #[derive(Debug)]
 pub enum Command<S, V>
 where
   S: std::fmt::Display,
   V: std::fmt::Display,
 {
+  /// Returns the kets matching the pattern.
   Keys(S),
+
+  /// Removes one or more keys.
   Del(Arity<S>),
+
+  /// Commands for checking the presence of keys.
   Exists(Arity<S>),
+
+  /// Commands for working with list keys.
   List(ListCommand<S, V>),
+
+  /// Commands for working with string keys.
   Strings(StringCommand<S, V>),
+
+  /// Commands for working with hash keys.
   Hashes(HashCommand<S, V>),
+
+  /// Commands for working with set keys.
   Sets(SetCommand<S, V>),
+
+  /// The echo command will return the contents of the string sent.
   Echo(S),
+
+  /// Auth commands
   Auth(AuthCredentials<S>),
 
   #[cfg(feature = "acl")]
