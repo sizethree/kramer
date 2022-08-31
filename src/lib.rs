@@ -1,4 +1,5 @@
 #![warn(clippy::missing_docs_in_private_items)]
+#![warn(clippy::print_stdout)]
 
 //! An implementation of the [redis protocol specification][redis] with an execution helper using
 //! the [`TcpStream`][tcp-stream] provided by [async-std].

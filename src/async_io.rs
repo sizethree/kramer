@@ -1,4 +1,5 @@
 #![cfg(feature = "kramer-async")]
+#![warn(clippy::print_stdout)]
 
 extern crate async_std;
 
@@ -20,7 +21,6 @@ where
 
   match reader.read_line(&mut buffer).await.and_then(|_res| readline(buffer)) {
     Ok(ResponseLine::Array(size)) => {
-      println!("array");
       let mut store = Vec::with_capacity(size);
 
       if size == 0 {
@@ -52,7 +52,6 @@ where
       Ok(Response::Array(store))
     }
     Ok(ResponseLine::BulkString(size)) => {
-      println!("bulky");
       if size < 1 {
         return Ok(Response::Item(ResponseValue::Empty));
       }

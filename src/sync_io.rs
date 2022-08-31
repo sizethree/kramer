@@ -1,3 +1,5 @@
+#![warn(clippy::print_stdout)]
+
 use crate::response::{readline, Response, ResponseLine, ResponseValue};
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
