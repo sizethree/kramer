@@ -1,19 +1,37 @@
 use crate::modifiers::{format_bulk_string, Arity, Insertion, Side};
 
+/// Lists.
 #[derive(Debug)]
 pub enum ListCommand<S, V>
 where
   S: std::fmt::Display,
   V: std::fmt::Display,
 {
+  /// List length.
   Len(S),
+
+  /// Adds an item to the list on the correct side.
   Push((Side, Insertion), S, Arity<V>),
+
+  ///  Pops an item from the side of a list with the option for a timeout.
   Pop(Side, S, Option<(Option<Arity<S>>, u64)>),
+
+  /// Removes items from a list.
   Rem(S, V, u64),
+
+  /// Returns the index of an item in a list.
   Index(S, i64),
+
+  /// Sets the value of an index of a list.
   Set(S, u64, V),
+
+  /// Inserts a value into a list.
   Insert(S, Side, V, V),
+
+  /// Truncate a list.
   Trim(S, i64, i64),
+
+  /// Return the length of a list.
   Range(S, i64, i64),
 }
 
@@ -78,8 +96,8 @@ where
       ListCommand::Len(key) => write!(formatter, "*2\r\n$4\r\nLLEN\r\n{}", format_bulk_string(key)),
       ListCommand::Pop(side, key, block) => {
         let (cmd, ext, kc) = match (side, block) {
-          (Side::Left, None) => ("LPOP", format!(""), 0),
-          (Side::Right, None) => ("RPOP", format!(""), 0),
+          (Side::Left, None) => ("LPOP", "".to_string(), 0),
+          (Side::Right, None) => ("RPOP", "".to_string(), 0),
           (Side::Left, Some((None, timeout))) => ("BLPOP", format_bulk_string(timeout), 1),
           (Side::Right, Some((None, timeout))) => ("BRPOP", format_bulk_string(timeout), 1),
           (Side::Left, Some((Some(values), timeout))) => {

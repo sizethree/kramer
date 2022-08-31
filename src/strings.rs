@@ -1,16 +1,29 @@
 use crate::modifiers::{format_bulk_string, Arity, Insertion};
 
+/// The `StringCommand` enum represents the most basic, key-value commands that
+/// redis offers; top-level keys with values being either strings or numbers.
 #[derive(Debug)]
 pub enum StringCommand<S, V>
 where
   S: std::fmt::Display,
   V: std::fmt::Display,
 {
+  /// Sets the value of a key.
   Set(Arity<(S, V)>, Option<std::time::Duration>, Insertion),
+
+  /// Returns the value of a key(s).
   Get(Arity<S>),
+
+  /// Returns the length of a key.
   Len(S),
+
+  /// Decrements the value stored at a key.
   Decr(S, usize),
+
+  /// Increments the value stored at a key.
   Incr(S, i64),
+
+  /// Appends a value to a string.
   Append(S, V),
 }
 
@@ -51,7 +64,7 @@ where
       StringCommand::Set(Arity::One((key, value)), timeout, insertion) => {
         let (k, v) = (format_bulk_string(key), format_bulk_string(value));
         let (cx, px) = match timeout {
-          None => (0, format!("")),
+          None => (0, "".to_string()),
           Some(t) => (
             2,
             format!("{}{}", format_bulk_string("PX"), format_bulk_string(t.as_millis())),
@@ -60,7 +73,7 @@ where
         let (ci, i) = match insertion {
           Insertion::IfExists => (1, format_bulk_string("XX")),
           Insertion::IfNotExists => (1, format_bulk_string("NX")),
-          Insertion::Always => (0, format!("")),
+          Insertion::Always => (0, "".to_string()),
         };
         write!(formatter, "*{}\r\n$3\r\nSET\r\n{}{}{}{}", 3 + ci + cx, k, v, px, i)
       }

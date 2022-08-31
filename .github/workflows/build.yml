@@ -15,6 +15,8 @@ jobs:
         run: rustup toolchain install stable
       - name: use-stable
         run: rustup default stable
+      - name: add-clippy
+        run: rustup component add clippy
       - name: build-sync
         run: cargo build
       - name: test-sync
@@ -22,6 +24,10 @@ jobs:
         env:
           REDIS_HOST: localhost
           REDIS_PORT: ${{ job.services.redis.ports[6379] }}
+      - name: "clippy: acl"
+        run: cargo clippy --features acl
+      - name: "clippy: async"
+        run: cargo clippy --features kramer-async
   stable-async:
     runs-on: ubuntu-latest
     services:
@@ -95,4 +101,13 @@ jobs:
         env:
           REDIS_HOST: localhost
           REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-
+  release:
+    runs-on: ubuntu-latest
+    needs: ["stable-sync", "stable-async"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          generate_release_notes: true

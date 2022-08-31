@@ -1,19 +1,38 @@
 use crate::modifiers::{format_bulk_string, Arity, Insertion};
 
+/// `HashCommand` represents the possible redis operations of keys that
+/// are a hash type.
 #[derive(Debug)]
 pub enum HashCommand<S, V>
 where
   S: std::fmt::Display,
   V: std::fmt::Display,
 {
+  /// Deletes fields from a given hash.
   Del(S, Arity<S>),
+
+  /// Sets the value of a hash for a given key.
   Set(S, Arity<(S, V)>, Insertion),
+
+  /// Returns the value (or many) stored in a hash at a specific field.
   Get(S, Option<Arity<S>>),
+
+  /// Returns the length of a string stored at a key within a hash.
   StrLen(S, S),
+
+  /// Returns the amount of keys in the given hash.
   Len(S),
+
+  /// Increments a key for the hash by a given amount.
   Incr(S, S, i64),
+
+  /// Returns all keys for the hash stored at a given key.
   Keys(S),
+
+  /// Returns all values for the hash stored at a given key.
   Vals(S),
+
+  /// Checks to see if the given field exists in the hash.
   Exists(S, S),
 }
 

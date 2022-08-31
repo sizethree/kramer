@@ -1,22 +1,40 @@
-#[derive(Debug, Clone, PartialEq)]
+/// For lists, items can either be inserted on the left or right; this translates to
+/// whether or not the generated command is `LPOP` or `RPOP` (for example).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Side {
+  /// Insert at the start.
   Left,
+
+  /// Insert at the end.
   Right,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// Redis provides the ability to conditionally apply an inseration based on the existence
+/// of the a value that is equal.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Insertion {
+  /// The presence of the value does not matter.
   Always,
+
+  /// The presence of the value is required to insert.
   IfExists,
+
+  /// The presence of the value is forbidden to insert.
   IfNotExists,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// The arity type here is used to mean a single or non-single container.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Arity<S> {
+  /// Wraps a `Vec`; many values.
   Many(Vec<S>),
+
+  /// Indicates a single value.
   One(S),
 }
 
+/// This method will return a string that is formatted following the redis serialization protocol
+/// standard to represent a bulk string.
 pub fn format_bulk_string<S: std::fmt::Display>(input: S) -> String {
   let as_str = format!("{}", input);
   format!("${}\r\n{}\r\n", as_str.len(), as_str)
@@ -34,7 +52,7 @@ where
   as_str
     .split("\r\n")
     .filter_map(|v| {
-      if v.starts_with("$") || v.starts_with("*") {
+      if v.starts_with('$') || v.starts_with('*') {
         None
       } else {
         Some(format!("{} ", v))

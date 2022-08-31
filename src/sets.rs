@@ -1,19 +1,38 @@
 use crate::modifiers::{format_bulk_string, Arity};
 
+/// The `SetCommand` is used for working with redis keys that are sets: unique collections
+/// of values.
 #[derive(Debug)]
 pub enum SetCommand<S, V>
 where
   S: std::fmt::Display,
   V: std::fmt::Display,
 {
+  /// Adds a member(s) to a set.
   Add(S, Arity<V>),
+
+  /// Removes a member(s) to a set.
   Rem(S, Arity<V>),
+
+  /// Returns the amount of members in the set.
   Card(S),
+
+  /// Returns the members of the set resulting from the union of all the given sets.
   Union(Arity<S>),
+
+  /// Returns the members of the set resulting from the intersection of all the given sets.
   Inter(Arity<S>),
+
+  /// Returns whether or not the given value is a member of the set.
   IsMember(S, V),
+
+  /// Returns the members of the set resulting from the difference of all the given sets.
   Diff(Arity<S>),
+
+  /// Returns the members of the set.
   Members(S),
+
+  /// Removes elements from the set.
   Pop(S, u64),
 }
 
