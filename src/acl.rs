@@ -20,19 +20,30 @@ pub struct SetUser<S>
 where
   S:,
 {
+  /// The name of the ACL entry.
   pub name: S,
+
+  /// An optional password that will be added to the acl command.
   pub password: Option<S>,
+
+  /// The set of commands the ACL entry should have the ability to execute.
   pub commands: Option<S>,
+
+  /// The set of keys the ACL entry should have access to.
   pub keys: Option<S>,
 }
 
+/// Redis acl commands.
 #[cfg(feature = "acl")]
 #[derive(Debug)]
 pub enum AclCommand<S>
 where
   S: std::fmt::Display,
 {
+  /// Wraps the `SetUser` struct for a type implementing display.
   SetUser(SetUser<S>),
+
+  /// Wraps the `DelUser` struct for a type implementing display.
   DelUser(Arity<S>),
 }
 

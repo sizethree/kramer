@@ -24,8 +24,10 @@ jobs:
         env:
           REDIS_HOST: localhost
           REDIS_PORT: ${{ job.services.redis.ports[6379] }}
-      - name: clippy
-        run: cargo clippy
+      - name: "clippy: acl"
+        run: cargo clippy --features acl
+      - name: "clippy: async"
+        run: cargo clippy --features kramer-async
   stable-async:
     runs-on: ubuntu-latest
     services:

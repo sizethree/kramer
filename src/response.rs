@@ -53,7 +53,7 @@ pub enum Response {
 /// this as a usize and return that value. We're also translating from an integer `-1` value into a
 /// `None` to represent an empty value.
 fn read_line_size(line: String) -> Result<Option<usize>, Error> {
-  match line.split_at(1).1 {
+  match line.trim_end().split_at(1).1 {
     "-1" => Ok(None),
     value => value
       .parse::<usize>()
@@ -81,7 +81,7 @@ pub fn readline(result: String) -> Result<ResponseLine, Error> {
     Some(b'-') => Ok(ResponseLine::Error(result)),
     Some(b'+') => Ok(ResponseLine::SimpleString(String::from(result.split_at(1).1))),
     Some(b':') => {
-      let (_, rest) = result.split_at(1);
+      let (_, rest) = result.trim_end().split_at(1);
       rest
         .parse::<i64>()
         .map_err(|e| Error::new(ErrorKind::Other, format!("{:?}", e)))

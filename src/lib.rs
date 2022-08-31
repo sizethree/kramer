@@ -139,6 +139,7 @@ where
   /// Auth commands
   Auth(AuthCredentials<S>),
 
+  /// ACL commands; currently unstable.
   #[cfg(feature = "acl")]
   Acl(AclCommand<S>),
 }

@@ -9,38 +9,38 @@ use async_std::prelude::*;
 
 use std::io::{Error, ErrorKind};
 
+/// Attempts to read RESP standard messages (newline delimeters), parsing into our `ResponseValue`
+/// enum.
 pub async fn read<C>(connection: C) -> Result<Response, Error>
 where
   C: async_std::io::Read + std::marker::Unpin,
 {
-  let mut lines = async_std::io::BufReader::new(connection).lines();
+  let mut reader = async_std::io::BufReader::new(connection);
+  let mut buffer = String::new();
 
-  match lines
-    .next()
-    .await
-    .ok_or_else(|| Error::new(ErrorKind::InvalidData, "kramer: no line available to parse."))
-    .and_then(|res| res.and_then(readline))
-  {
+  match reader.read_line(&mut buffer).await.and_then(|_res| readline(buffer)) {
     Ok(ResponseLine::Array(size)) => {
+      println!("array");
       let mut store = Vec::with_capacity(size);
 
       if size == 0 {
         return Ok(Response::Array(vec![]));
       }
 
-      while let Ok(kind) = lines
-        .next()
-        .await
-        .ok_or_else(|| Error::new(ErrorKind::InvalidData, "kramer: missing line during array parsing."))
-        .and_then(|res| res.and_then(readline))
-      {
+      while store.len() < size {
+        let mut line_buffer = String::new();
+
+        let kind = reader
+          .read_line(&mut line_buffer)
+          .await
+          .and_then(|_res| readline(line_buffer))?;
+
         match kind {
-          ResponseLine::BulkString(size) => match lines.next().await {
-            Some(Ok(bulky)) if bulky.len() == size => {
-              store.push(ResponseValue::String(bulky));
-            }
-            _ => break,
-          },
+          ResponseLine::BulkString(size) => {
+            let mut real_value = String::with_capacity(size);
+            reader.read_line(&mut real_value).await?;
+            store.push(ResponseValue::String(real_value.trim_end().to_string()));
+          }
           _ => break,
         }
 
@@ -52,27 +52,26 @@ where
       Ok(Response::Array(store))
     }
     Ok(ResponseLine::BulkString(size)) => {
+      println!("bulky");
       if size < 1 {
         return Ok(Response::Item(ResponseValue::Empty));
       }
 
-      let out = lines.next().await.ok_or_else(|| {
-        Error::new(
-          ErrorKind::InvalidData,
-          "kramer: expected line from bulk string but received nothing",
-        )
-      })??;
+      let mut real_value = String::with_capacity(size);
+      reader.read_line(&mut real_value).await?;
 
-      Ok(Response::Item(ResponseValue::String(out)))
+      Ok(Response::Item(ResponseValue::String(real_value.trim_end().to_string())))
     }
     Ok(ResponseLine::Null) => Ok(Response::Item(ResponseValue::Empty)),
-    Ok(ResponseLine::SimpleString(simple)) => Ok(Response::Item(ResponseValue::String(simple))),
+    Ok(ResponseLine::SimpleString(simple)) => Ok(Response::Item(ResponseValue::String(simple.trim_end().to_string()))),
     Ok(ResponseLine::Integer(value)) => Ok(Response::Item(ResponseValue::Integer(value))),
     Ok(ResponseLine::Error(e)) => Err(Error::new(ErrorKind::Other, e)),
     Err(e) => Err(e),
   }
 }
 
+/// An async implementation of a complete message exchange. The provided message will be written to
+/// our connection, and a response will be read.
 pub async fn execute<C, S>(mut connection: C, message: S) -> Result<Response, Error>
 where
   S: std::fmt::Display,
@@ -82,6 +81,7 @@ where
   read(connection).await
 }
 
+/// An async implementation of opening a tcp connection, and sending a single message.
 pub async fn send<S>(addr: &str, message: S) -> Result<Response, Error>
 where
   S: std::fmt::Display,
