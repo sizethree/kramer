@@ -74,22 +74,20 @@ where
       }
       AclCommand::SetUser(inner) => match (&inner.password, &inner.commands, &inner.keys) {
         (Some(password), Some(command_pattern), Some(key_pattern)) => {
+          let count = 6 + command_pattern.len();
           write!(
             formatter,
-            "*7\r\n$3\r\nACL\r\n{}{}{}{}{}{}",
+            "*{count}\r\n$3\r\nACL\r\n{}{}{}{}{}{}",
             format_bulk_string("SETUSER"),
             format_bulk_string(&inner.name),
             format_bulk_string("on"),
             format_bulk_string(format!(">{password}")),
             format_bulk_string(format!("~{key_pattern}")),
-            format_bulk_string(
-              command_pattern
-                .iter()
-                .fold(String::new(), |acc, command| acc + format!("+{command} ").as_str())
-                .trim_end()
-            )
+            command_pattern.iter().fold(String::new(), |acc, command| acc
+              + format_bulk_string(format!("+{command}")).as_str())
           )
         }
+        // TODO: implement other combinations of this command.
         (_, _, _) => Ok(()),
       },
     }
@@ -126,7 +124,7 @@ mod tests {
       keys: Some("books"),
     });
 
-    assert_eq!(format!("{}", command), "*7\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$14\r\nlibrary-member\r\n$2\r\non\r\n$11\r\n>many-books\r\n$6\r\n~books\r\n$15\r\n+hgetall +blpop\r\n");
+    assert_eq!(format!("{}", command), "*8\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$14\r\nlibrary-member\r\n$2\r\non\r\n$11\r\n>many-books\r\n$6\r\n~books\r\n$8\r\n+hgetall\r\n$6\r\n+blpop\r\n");
     assert_eq!(
       humanize_command::<&str, &str>(&crate::Command::Acl(command)),
       "ACL SETUSER library-member on >many-books ~books +hgetall +blpop"
