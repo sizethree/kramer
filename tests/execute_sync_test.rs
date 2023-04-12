@@ -203,16 +203,33 @@ fn test_inter_none() {
 fn test_acl_sweep() {
   let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
   let set_user: Command<&str, &str> = Command::Acl(AclCommand::SetUser(SetUser {
-    commands: Some(vec!["lpop"]),
+    commands: Some(vec!["lpop", "lrange"]),
     keys: Some("--test"),
     password: Some("--test"),
     name: "--test",
   }));
-  let res = execute(&mut con, set_user);
-  assert_eq!(res.is_ok(), true);
+  let res = execute(&mut con, &set_user);
+  assert_eq!(res.unwrap(), Response::Item(ResponseValue::String("OK".into())));
   let del_user: Command<&str, &str> = Command::Acl(AclCommand::DelUser(Arity::One("--test")));
   let res = execute(&mut con, del_user);
   assert_eq!(res.is_ok(), true);
+}
+
+#[cfg(feature = "acl")]
+#[test]
+fn test_acl_err() {
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  let set_user: Command<&str, &str> = Command::Acl(AclCommand::SetUser(SetUser {
+    commands: Some(vec!["lpop", "not-a-valid-command"]),
+    keys: Some("--test"),
+    password: Some("--test"),
+    name: "--test",
+  }));
+  let res = execute(&mut con, &set_user);
+  assert_eq!(
+    format!("{}", res.unwrap_err()).contains("Unknown command or category name in ACL"),
+    true,
+  );
 }
 
 #[test]
