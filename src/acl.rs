@@ -18,7 +18,7 @@ use super::modifiers::{format_bulk_string, Arity};
 #[derive(Debug)]
 pub struct SetUser<S>
 where
-  S:,
+  S: std::fmt::Display,
 {
   /// The name of the ACL entry.
   pub name: S,
@@ -27,7 +27,7 @@ where
   pub password: Option<S>,
 
   /// The set of commands the ACL entry should have the ability to execute.
-  pub commands: Option<S>,
+  pub commands: Option<Vec<S>>,
 
   /// The set of keys the ACL entry should have access to.
   pub keys: Option<S>,
@@ -82,7 +82,12 @@ where
             format_bulk_string("on"),
             format_bulk_string(format!(">{password}")),
             format_bulk_string(format!("~{key_pattern}")),
-            format_bulk_string(format!("+{command_pattern}")),
+            format_bulk_string(
+              command_pattern
+                .iter()
+                .fold(String::new(), |acc, command| acc + format!("+{command} ").as_str())
+                .trim_end()
+            )
           )
         }
         (_, _, _) => Ok(()),
@@ -101,7 +106,7 @@ mod tests {
     let command = AclCommand::SetUser(SetUser {
       name: "library-member",
       password: Some("many-books"),
-      commands: Some("hgetall"),
+      commands: Some(vec!["hgetall"]),
       keys: Some("books"),
     });
 
@@ -109,6 +114,22 @@ mod tests {
     assert_eq!(
       humanize_command::<&str, &str>(&crate::Command::Acl(command)),
       "ACL SETUSER library-member on >many-books ~books +hgetall"
+    );
+  }
+
+  #[test]
+  fn format_full_setuser_multi_command() {
+    let command = AclCommand::SetUser(SetUser {
+      name: "library-member",
+      password: Some("many-books"),
+      commands: Some(vec!["hgetall", "blpop"]),
+      keys: Some("books"),
+    });
+
+    assert_eq!(format!("{}", command), "*7\r\n$3\r\nACL\r\n$7\r\nSETUSER\r\n$14\r\nlibrary-member\r\n$2\r\non\r\n$11\r\n>many-books\r\n$6\r\n~books\r\n$15\r\n+hgetall +blpop\r\n");
+    assert_eq!(
+      humanize_command::<&str, &str>(&crate::Command::Acl(command)),
+      "ACL SETUSER library-member on >many-books ~books +hgetall +blpop"
     );
   }
 
