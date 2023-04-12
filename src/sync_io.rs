@@ -81,7 +81,7 @@ where
   S: std::fmt::Display,
   C: std::io::Write + std::io::Read + std::marker::Unpin,
 {
-  write!(connection, "{}", message)?;
+  write!(connection, "{message}")?;
   read(connection)
 }
 

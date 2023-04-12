@@ -4,6 +4,9 @@ extern crate kramer;
 use kramer::{execute, Arity, AuthCredentials, Command, Insertion, Response, ResponseValue, SetCommand, StringCommand};
 use std::env::var;
 
+#[cfg(feature = "acl")]
+use kramer::{AclCommand, SetUser};
+
 #[cfg(test)]
 fn get_redis_url() -> String {
   let host = var("REDIS_HOST").unwrap_or(String::from("0.0.0.0"));
@@ -193,6 +196,23 @@ fn test_inter_none() {
   execute(&mut con, Command::Del::<_, &str>(Arity::One(one))).expect("executed");
   execute(&mut con, Command::Del::<_, &str>(Arity::One(two))).expect("executed");
   assert_eq!(result, Response::Array(vec![]));
+}
+
+#[cfg(feature = "acl")]
+#[test]
+fn test_acl_sweep() {
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  let set_user: Command<&str, &str> = Command::Acl(AclCommand::SetUser(SetUser {
+    commands: Some(vec!["lpop"]),
+    keys: Some("--test"),
+    password: Some("--test"),
+    name: "--test",
+  }));
+  let res = execute(&mut con, set_user);
+  assert_eq!(res.is_ok(), true);
+  let del_user: Command<&str, &str> = Command::Acl(AclCommand::DelUser(Arity::One("--test")));
+  let res = execute(&mut con, del_user);
+  assert_eq!(res.is_ok(), true);
 }
 
 #[test]
