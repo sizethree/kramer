@@ -29,6 +29,7 @@ fn sync_test_auth_password() {
   assert_eq!(result, Response::Item(ResponseValue::String("OK".into())));
 }
 
+#[cfg(feature = "acl")]
 #[test]
 fn test_acl_list() {
   let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
