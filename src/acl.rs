@@ -40,6 +40,9 @@ pub enum AclCommand<S>
 where
   S: std::fmt::Display,
 {
+  /// Requests a list of all acl entries.
+  List,
+
   /// Wraps the `SetUser` struct for a type implementing display.
   SetUser(SetUser<S>),
 
@@ -54,6 +57,7 @@ where
 {
   fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
     match self {
+      AclCommand::List => write!(formatter, "*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n"),
       AclCommand::DelUser(Arity::One(inner)) => {
         write!(
           formatter,
@@ -98,6 +102,12 @@ where
 mod tests {
   use super::{AclCommand, SetUser};
   use crate::modifiers::{humanize_command, Arity};
+
+  #[test]
+  fn format_list() {
+    let command: AclCommand<&str> = AclCommand::List;
+    assert_eq!(format!("{command}"), "*2\r\n$3\r\nACL\r\n$4\r\nLIST\r\n");
+  }
 
   #[test]
   fn format_full_setuser() {

@@ -29,6 +29,18 @@ fn sync_test_auth_password() {
   assert_eq!(result, Response::Item(ResponseValue::String("OK".into())));
 }
 
+#[cfg(feature = "acl")]
+#[test]
+fn test_acl_list() {
+  let mut con = std::net::TcpStream::connect(get_redis_url()).expect("connection");
+  let res = execute(&mut con, Command::<&str, &str>::Acl(AclCommand::<&str>::List)).expect("");
+  assert_eq!(
+    matches!(res, Response::Array(_)),
+    true,
+    "an array was returned from the 'ACL LIST'"
+  );
+}
+
 #[test]
 fn test_strlen_present() {
   let key = "test_strlen_present";
