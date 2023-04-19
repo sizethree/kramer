@@ -180,11 +180,11 @@ where
 {
   /// This function mirrors the `execute` function provided in the `async_io` module, but uses the
   /// internally-available `AsyncRead` impl for our commands.
-  pub async fn execute<W>(&mut self, connection: &mut W) -> Result<Response, std::io::Error>
+  pub async fn execute<W>(&mut self, mut connection: W) -> Result<Response, std::io::Error>
   where
     W: async_std::io::Write + async_std::io::Read + std::marker::Unpin,
   {
-    async_std::io::copy(self, connection).await?;
+    async_std::io::copy(self, &mut connection).await?;
     read(connection).await
   }
 }
