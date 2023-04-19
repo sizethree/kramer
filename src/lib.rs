@@ -214,7 +214,14 @@ where
       let header = header(content_size);
       for b in header.as_bytes() {
         if count >= outbound.len() {
-          return std::task::Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::Other, "")));
+          let err = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+              "Unable to inject command 'header' into buffer at position {count} (of {})",
+              outbound.len()
+            ),
+          );
+          return std::task::Poll::Ready(Err(err));
         }
 
         outbound[count] = *b;
