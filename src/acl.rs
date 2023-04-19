@@ -16,10 +16,7 @@ use super::modifiers::{format_bulk_string, Arity};
 /// Notice: Currently `Display` is only implemented if all fields are present/`Some`.
 #[cfg(feature = "acl")]
 #[derive(Debug)]
-pub struct SetUser<S>
-where
-  S: std::fmt::Display,
-{
+pub struct SetUser<S> {
   /// The name of the ACL entry.
   pub name: S,
 
@@ -36,10 +33,7 @@ where
 /// Redis acl commands.
 #[cfg(feature = "acl")]
 #[derive(Debug)]
-pub enum AclCommand<S>
-where
-  S: std::fmt::Display,
-{
+pub enum AclCommand<S> {
   /// Requests a list of all acl entries.
   List,
 

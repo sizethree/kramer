@@ -82,6 +82,96 @@ fn test_execute_arc() {
   );
 }
 
+#[cfg(all(test, feature = "kramer-async-read"))]
+#[test]
+fn test_async_read_fmt() {
+  async_std::task::block_on(async {
+    let mut writer = Vec::with_capacity(1000);
+    let mut reader = Command::Strings(StringCommand::Set(
+      Arity::One(("four", b"hi".into_iter().enumerate())),
+      None,
+      Insertion::Always,
+    ));
+    async_std::io::copy(&mut reader, &mut writer)
+      .await
+      .expect("unable to copy");
+    let parsed = String::from_utf8(writer);
+
+    assert_eq!(parsed, Ok("*3\r\n$3\r\nSET\r\n$4\r\nfour\r\n$2\r\nhi\r\n".to_string()));
+  });
+}
+
+#[cfg(all(test, feature = "kramer-async-read"))]
+#[test]
+fn test_async_read_exec() {
+  async_std::task::block_on(async {
+    let mut reader = Command::Strings(StringCommand::Set(
+      Arity::One(("four", b"hi".into_iter().enumerate())),
+      None,
+      Insertion::Always,
+    ));
+    let url = get_redis_url();
+    let mut stream = async_std::net::TcpStream::connect(url).await.unwrap();
+    async_std::io::copy(&mut reader, &mut stream).await.unwrap();
+    let res = read(&mut stream).await.expect("read response from redis");
+    assert_eq!(res, Response::Item(ResponseValue::String("OK".to_string())));
+  });
+}
+
+#[cfg(all(test, feature = "kramer-async-read"))]
+#[test]
+fn test_async_read_exec_impl() {
+  async_std::task::block_on(async {
+    let mut reader = Command::Strings(StringCommand::Set(
+      Arity::One(("four", b"hi".into_iter().enumerate())),
+      None,
+      Insertion::Always,
+    ));
+    let url = get_redis_url();
+    let mut stream = async_std::net::TcpStream::connect(url).await.unwrap();
+    let res = reader.execute(&mut stream).await.unwrap();
+    assert_eq!(res, Response::Item(ResponseValue::String("OK".to_string())));
+  });
+}
+
+#[cfg(all(test, feature = "kramer-async-read"))]
+#[test]
+fn test_async_read_exec_impl_lpush() {
+  async_std::task::block_on(async {
+    let mut reader = Command::Lists(ListCommand::Push(
+      (Side::Right, Insertion::Always),
+      "four-r",
+      Arity::One(b"hi".into_iter().enumerate()),
+    ));
+    let url = get_redis_url();
+    let mut stream = async_std::net::TcpStream::connect(url).await.unwrap();
+    execute(&mut stream, Command::<&str, &str>::Del(Arity::One("four-r")))
+      .await
+      .expect("cannot clean");
+    let res = reader.execute(&mut stream).await.unwrap();
+    assert_eq!(res, Response::Item(ResponseValue::Integer(1)));
+  });
+}
+
+#[cfg(all(test, feature = "kramer-async-read"))]
+#[test]
+fn test_async_read_exec_impl_rpush() {
+  async_std::task::block_on(async {
+    let mut reader = Command::Lists(ListCommand::Push(
+      (Side::Left, Insertion::Always),
+      "four-l",
+      Arity::One(b"hi".into_iter().enumerate()),
+    ));
+    let url = get_redis_url();
+    let mut stream = async_std::net::TcpStream::connect(url).await.unwrap();
+    execute(&mut stream, Command::<&str, &str>::Del(Arity::One("four-l")))
+      .await
+      .expect("cannot clean");
+    let res = reader.execute(&mut stream).await.unwrap();
+    assert_eq!(res, Response::Item(ResponseValue::Integer(1)));
+  });
+}
+
 #[test]
 fn test_execute_nested() {
   let result = async_std::task::block_on(async {
@@ -256,7 +346,7 @@ fn test_blpush_single() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -265,7 +355,7 @@ fn test_blpush_single() {
     .await?;
     let out = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Pop(Side::Left, key, Some((None, 0)))),
+      Command::Lists::<_, &str>(ListCommand::Pop(Side::Left, key, Some((None, 0)))),
     )
     .await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
@@ -286,7 +376,7 @@ fn test_blpush_blocking() {
   let (key, url) = ("test_lpush_blocking", get_redis_url());
 
   let handle = async_std::task::spawn(async {
-    let cmd = Command::List::<_, &str>(ListCommand::Pop(Side::Left, "test_lpush_blocking", Some((None, 0))));
+    let cmd = Command::Lists::<_, &str>(ListCommand::Pop(Side::Left, "test_lpush_blocking", Some((None, 0))));
     let url = get_redis_url();
     let dest = url.as_str();
     let mut con = async_std::net::TcpStream::connect(dest).await.expect("foo");
@@ -298,7 +388,7 @@ fn test_blpush_blocking() {
   async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -326,7 +416,7 @@ fn test_lpush_single() {
   let result = async_std::task::block_on(async {
     let out = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -345,13 +435,13 @@ fn test_llen_single() {
   let (key, url) = ("test_llen_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List::<_, &str>(ListCommand::Push(
+    let ins = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
     ));
     send(url.as_str(), ins).await?;
-    let result = send(url.as_str(), Command::List::<_, &str>(ListCommand::Len(key))).await;
+    let result = send(url.as_str(), Command::Lists::<_, &str>(ListCommand::Len(key))).await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     result
   });
@@ -366,7 +456,7 @@ fn test_lpush_multi() {
   let result = async_std::task::block_on(async {
     let out = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::Many(vec!["kramer", "jerry"]),
@@ -387,7 +477,7 @@ fn test_lpushx_single_w_no_exists() {
   let result = async_std::task::block_on(async {
     let out = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::IfExists),
         key,
         Arity::One("kramer"),
@@ -408,7 +498,7 @@ fn test_lpushx_single_w_exists() {
   let result = async_std::task::block_on(async {
     send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -417,7 +507,7 @@ fn test_lpushx_single_w_exists() {
     .await?;
     let out = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Left, Insertion::IfExists),
         key,
         Arity::One("kramer"),
@@ -438,7 +528,7 @@ fn test_rpush_single() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Right, Insertion::Always),
         key,
         Arity::One("kramer"),
@@ -457,7 +547,7 @@ fn test_lpop_single() {
   let (key, url) = ("test_lpop_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::List::<_, &str>(ListCommand::Push(
+    let push = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry"]),
@@ -465,7 +555,7 @@ fn test_lpop_single() {
     send(url.as_str(), push).await?;
     let result = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Pop(Side::Left, key, None)),
+      Command::Lists::<_, &str>(ListCommand::Pop(Side::Left, key, None)),
     )
     .await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
@@ -483,7 +573,7 @@ fn test_rpop_single() {
   let (key, url) = ("test_rpop_single", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let push = Command::List::<_, &str>(ListCommand::Push(
+    let push = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry"]),
@@ -491,7 +581,7 @@ fn test_rpop_single() {
     send(url.as_str(), push).await?;
     let result = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Pop(Side::Right, key, None)),
+      Command::Lists::<_, &str>(ListCommand::Pop(Side::Right, key, None)),
     )
     .await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
@@ -511,7 +601,7 @@ fn test_rpush_multiple() {
   let result = async_std::task::block_on(async {
     let set_result = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Push(
+      Command::Lists::<_, &str>(ListCommand::Push(
         (Side::Right, Insertion::Always),
         key,
         Arity::Many(vec!["kramer", "jerry"]),
@@ -1090,13 +1180,13 @@ fn test_lrange() {
   let (key, url) = ("test_lrange", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List::<_, &str>(ListCommand::Push(
+    let ins = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
     ));
     send(url.as_str(), ins).await?;
-    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Range(key, 0, 10))).await;
+    let out = send(url.as_str(), Command::Lists::<_, &str>(ListCommand::Range(key, 0, 10))).await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
@@ -1112,13 +1202,13 @@ fn test_lindex_present() {
   let (key, url) = ("test_lindex_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List::<_, &str>(ListCommand::Push(
+    let ins = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
     ));
     send(url.as_str(), ins).await?;
-    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Index(key, 0))).await;
+    let out = send(url.as_str(), Command::Lists::<_, &str>(ListCommand::Index(key, 0))).await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
@@ -1134,7 +1224,7 @@ fn test_lindex_missing() {
   let (key, url) = ("test_lindex_missing", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Index(key, 0))).await;
+    let out = send(url.as_str(), Command::Lists::<_, &str>(ListCommand::Index(key, 0))).await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
@@ -1147,7 +1237,7 @@ fn test_lrem_present() {
   let (key, url) = ("test_lrem_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List::<_, &str>(ListCommand::Push(
+    let ins = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Left, Insertion::Always),
       key,
       Arity::One("kramer"),
@@ -1155,7 +1245,7 @@ fn test_lrem_present() {
     send(url.as_str(), ins).await?;
     let out = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Rem(key, "kramer", 1)),
+      Command::Lists::<_, &str>(ListCommand::Rem(key, "kramer", 1)),
     )
     .await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
@@ -1172,7 +1262,7 @@ fn test_lrem_missing() {
   let result = async_std::task::block_on(async {
     let out = send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Rem(key, "kramer", 1)),
+      Command::Lists::<_, &str>(ListCommand::Rem(key, "kramer", 1)),
     )
     .await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
@@ -1187,14 +1277,14 @@ fn test_ltrim_present() {
   let (key, url) = ("test_ltrim_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List::<_, &str>(ListCommand::Push(
+    let ins = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
     ));
     send(url.as_str(), ins).await?;
-    send(url.as_str(), Command::List::<_, &str>(ListCommand::Trim(key, 0, 2))).await?;
-    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Range(key, 0, 10))).await;
+    send(url.as_str(), Command::Lists::<_, &str>(ListCommand::Trim(key, 0, 2))).await?;
+    let out = send(url.as_str(), Command::Lists::<_, &str>(ListCommand::Range(key, 0, 10))).await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
@@ -1214,7 +1304,7 @@ fn test_linsert_left_present() {
   let (key, url) = ("test_linsert_left_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List::<_, &str>(ListCommand::Push(
+    let ins = Command::Lists::<_, &str>(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
@@ -1222,10 +1312,10 @@ fn test_linsert_left_present() {
     send(url.as_str(), ins).await?;
     send(
       url.as_str(),
-      Command::List::<_, &str>(ListCommand::Insert(key, Side::Left, "george", "newman")),
+      Command::Lists::<_, &str>(ListCommand::Insert(key, Side::Left, "george", "newman")),
     )
     .await?;
-    let out = send(url.as_str(), Command::List::<_, &str>(ListCommand::Range(key, 0, 10))).await;
+    let out = send(url.as_str(), Command::Lists::<_, &str>(ListCommand::Range(key, 0, 10))).await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });
@@ -1248,7 +1338,7 @@ fn test_linsert_right_present() {
   let (key, url) = ("test_linsert_right_present", get_redis_url());
 
   let result = async_std::task::block_on(async {
-    let ins = Command::List(ListCommand::Push(
+    let ins = Command::Lists(ListCommand::Push(
       (Side::Right, Insertion::Always),
       key,
       Arity::Many(vec!["kramer", "jerry", "elaine", "george"]),
@@ -1256,10 +1346,10 @@ fn test_linsert_right_present() {
     send(url.as_str(), ins).await?;
     send(
       url.as_str(),
-      Command::List(ListCommand::Insert(key, Side::Right, "george", "newman")),
+      Command::Lists(ListCommand::Insert(key, Side::Right, "george", "newman")),
     )
     .await?;
-    let out = send(url.as_str(), Command::List(ListCommand::Range(key, 0, 10))).await;
+    let out = send(url.as_str(), Command::Lists(ListCommand::Range(key, 0, 10))).await;
     send(url.as_str(), Command::Del::<_, &str>(Arity::One(key))).await?;
     out
   });

@@ -3,11 +3,7 @@ use crate::modifiers::{format_bulk_string, Arity, Insertion};
 /// `HashCommand` represents the possible redis operations of keys that
 /// are a hash type.
 #[derive(Debug)]
-pub enum HashCommand<S, V>
-where
-  S: std::fmt::Display,
-  V: std::fmt::Display,
-{
+pub enum HashCommand<S, V> {
   /// Deletes fields from a given hash.
   Del(S, Arity<S>),
 

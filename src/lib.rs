@@ -77,10 +77,7 @@ pub use hashes::HashCommand;
 
 /// Redis authorization supports password and user/password authorization schemes.
 #[derive(Debug)]
-pub enum AuthCredentials<S>
-where
-  S: std::fmt::Display,
-{
+pub enum AuthCredentials<S> {
   /// Builds an AUTH command with only a password.
   Password(S),
 
@@ -108,11 +105,7 @@ where
 /// The main `Command` enum here represents all of the different variants of redis commands
 /// that are supported by the library.
 #[derive(Debug)]
-pub enum Command<S, V>
-where
-  S: std::fmt::Display,
-  V: std::fmt::Display,
-{
+pub enum Command<S, V> {
   /// Returns the kets matching the pattern.
   Keys(S),
 
@@ -123,7 +116,7 @@ where
   Exists(Arity<S>),
 
   /// Commands for working with list keys.
-  List(ListCommand<S, V>),
+  Lists(ListCommand<S, V>),
 
   /// Commands for working with string keys.
   Strings(StringCommand<S, V>),
@@ -170,10 +163,115 @@ where
         let right = values.iter().map(format_bulk_string).collect::<String>();
         write!(formatter, "*{}\r\n$3\r\nDEL\r\n{}", len + 1, right)
       }
-      Command::List(list_command) => write!(formatter, "{}", list_command),
+      Command::Lists(list_command) => write!(formatter, "{}", list_command),
       Command::Strings(string_command) => write!(formatter, "{}", string_command),
       Command::Hashes(hash_command) => write!(formatter, "{}", hash_command),
       Command::Sets(set_command) => write!(formatter, "{}", set_command),
+    }
+  }
+}
+
+#[cfg(feature = "kramer-async-read")]
+impl<K, V, I> Command<K, V>
+where
+  K: std::fmt::Display + std::marker::Unpin,
+  I: std::ops::Deref<Target = u8>,
+  V: std::iter::ExactSizeIterator<Item = (usize, I)> + std::marker::Unpin,
+{
+  /// This function mirrors the `execute` function provided in the `async_io` module, but uses the
+  /// internally-available `AsyncRead` impl for our commands.
+  pub async fn execute<W>(&mut self, connection: &mut W) -> Result<Response, std::io::Error>
+  where
+    W: async_std::io::Write + async_std::io::Read + std::marker::Unpin,
+  {
+    async_std::io::copy(self, connection).await?;
+    read(connection).await
+  }
+}
+
+/// This function might be an abstraction made too early, but it is useful for making the process
+/// of consuming our iterator into a buffer, with the "header" being applied at the start into a
+/// generic function.
+#[cfg(feature = "kramer-async-read")]
+fn read_formatted<I, II, H>(outbound: &mut [u8], iter: &mut I, header: H) -> std::task::Poll<std::io::Result<usize>>
+where
+  II: std::ops::Deref<Target = u8>,
+  I: std::iter::ExactSizeIterator<Item = (usize, II)> + std::marker::Unpin,
+  H: Fn(usize) -> String,
+{
+  if iter.len() == 0 {
+    return std::task::Poll::Ready(Ok(0));
+  }
+
+  let mut count = 0;
+  let content_size = iter.len();
+
+  for (index, bb) in iter.by_ref() {
+    // TODO: if the outbound buffer is larger than our initial "header" here, we will
+    // probably have problems. This should probably simply mutate our iterator in some way
+    // where it contains this additional data?
+    if index == 0 {
+      let header = header(content_size);
+      for b in header.as_bytes() {
+        if count >= outbound.len() {
+          return std::task::Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::Other, "")));
+        }
+
+        outbound[count] = *b;
+        count += 1;
+      }
+    }
+
+    outbound[count] = *bb;
+    count += 1;
+
+    // We're checking the capacity of our buffer here, but not above.
+    if count >= outbound.len() {
+      return std::task::Poll::Ready(Ok(count));
+    }
+  }
+
+  if iter.len() == 0 {
+    outbound[count] = b'\r';
+    outbound[count + 1] = b'\n';
+    count += 2;
+  }
+
+  std::task::Poll::Ready(Ok(count))
+}
+
+/// This implementation may be incredibly unstable. Namely, we are trying to take something that is
+/// an iterator, and consume its contents _after_ we've injected our "header", which is the bulk
+/// string RESP data.
+#[cfg(feature = "kramer-async-read")]
+impl<K, V, I> async_std::io::Read for Command<K, V>
+where
+  K: std::fmt::Display + std::marker::Unpin,
+  I: std::ops::Deref<Target = u8>,
+  V: std::iter::ExactSizeIterator<Item = (usize, I)> + std::marker::Unpin,
+{
+  fn poll_read(
+    mut self: std::pin::Pin<&mut Self>,
+    _: &mut core::task::Context,
+    outbound: &mut [u8],
+  ) -> std::task::Poll<std::io::Result<usize>> {
+    match *self {
+      Command::Lists(ListCommand::Push((ref side, Insertion::Always), ref key, Arity::One(ref mut iter))) => {
+        read_formatted(outbound, iter, |content_size| {
+          let op_str = match side {
+            Side::Left => format_bulk_string("LPUSH"),
+            Side::Right => format_bulk_string("RPUSH"),
+          };
+          format!("*3\r\n{}{}${}\r\n", op_str, format_bulk_string(key), content_size)
+        })
+      }
+
+      Command::Strings(StringCommand::Set(Arity::One((ref key, ref mut iter)), None, Insertion::Always)) => {
+        read_formatted(outbound, iter, |content_size| {
+          format!("*3\r\n$3\r\nSET\r\n{}${}\r\n", format_bulk_string(key), content_size)
+        })
+      }
+      _ => todo!("Not all commands have been implemented as async readers"),
     }
   }
 }
@@ -194,7 +292,7 @@ mod fmt_tests {
   #[test]
   fn test_llen_fmt() {
     assert_eq!(
-      format!("{}", Command::List::<&str, &str>(ListCommand::Len("kramer"))),
+      format!("{}", Command::Lists::<&str, &str>(ListCommand::Len("kramer"))),
       "*2\r\n$4\r\nLLEN\r\n$6\r\nkramer\r\n"
     );
   }
@@ -204,7 +302,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Push(
+        Command::Lists::<&str, &str>(ListCommand::Push(
           (Side::Left, Insertion::Always),
           "seinfeld",
           Arity::Many(vec!["kramer"]),
@@ -219,7 +317,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Push(
+        Command::Lists::<&str, &str>(ListCommand::Push(
           (Side::Right, Insertion::Always),
           "seinfeld",
           Arity::Many(vec!["kramer"]),
@@ -234,7 +332,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Push(
+        Command::Lists::<&str, &str>(ListCommand::Push(
           (Side::Right, Insertion::IfExists),
           "seinfeld",
           Arity::Many(vec!["kramer"]),
@@ -249,7 +347,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Push(
+        Command::Lists::<&str, &str>(ListCommand::Push(
           (Side::Left, Insertion::IfExists),
           "seinfeld",
           Arity::Many(vec!["kramer"]),
@@ -264,7 +362,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Push(
+        Command::Lists::<&str, &str>(ListCommand::Push(
           (Side::Right, Insertion::Always),
           "seinfeld",
           Arity::Many(vec!["kramer", "jerry"]),
@@ -279,7 +377,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(Side::Right, "seinfeld", None))
+        Command::Lists::<&str, &str>(ListCommand::Pop(Side::Right, "seinfeld", None))
       ),
       "*2\r\n$4\r\nRPOP\r\n$8\r\nseinfeld\r\n"
     );
@@ -290,7 +388,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(Side::Left, "seinfeld", None))
+        Command::Lists::<&str, &str>(ListCommand::Pop(Side::Left, "seinfeld", None))
       ),
       "*2\r\n$4\r\nLPOP\r\n$8\r\nseinfeld\r\n"
     );
@@ -299,7 +397,10 @@ mod fmt_tests {
   #[test]
   fn test_lrange_fmt() {
     assert_eq!(
-      format!("{}", Command::List::<&str, &str>(ListCommand::Range("seinfeld", 0, -1))),
+      format!(
+        "{}",
+        Command::Lists::<&str, &str>(ListCommand::Range("seinfeld", 0, -1))
+      ),
       "*4\r\n$6\r\nLRANGE\r\n$8\r\nseinfeld\r\n$1\r\n0\r\n$2\r\n-1\r\n"
     );
   }
@@ -309,7 +410,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(Side::Right, "seinfeld", Some((None, 10))))
+        Command::Lists::<&str, &str>(ListCommand::Pop(Side::Right, "seinfeld", Some((None, 10))))
       ),
       "*3\r\n$5\r\nBRPOP\r\n$8\r\nseinfeld\r\n$2\r\n10\r\n"
     );
@@ -320,7 +421,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(
+        Command::Lists::<&str, &str>(ListCommand::Pop(
           Side::Right,
           "seinfeld",
           Some((Some(Arity::One("derry-girls")), 10))
@@ -335,7 +436,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(
+        Command::Lists::<&str, &str>(ListCommand::Pop(
           Side::Right,
           "seinfeld",
           Some((Some(Arity::Many(vec!["derry-girls", "creek"])), 10))
@@ -350,7 +451,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(Side::Left, "seinfeld", Some((None, 10))))
+        Command::Lists::<&str, &str>(ListCommand::Pop(Side::Left, "seinfeld", Some((None, 10))))
       ),
       "*3\r\n$5\r\nBLPOP\r\n$8\r\nseinfeld\r\n$2\r\n10\r\n"
     );
@@ -361,7 +462,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(
+        Command::Lists::<&str, &str>(ListCommand::Pop(
           Side::Left,
           "seinfeld",
           Some((Some(Arity::One("derry-girls")), 10))
@@ -376,7 +477,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Pop(
+        Command::Lists::<&str, &str>(ListCommand::Pop(
           Side::Left,
           "seinfeld",
           Some((Some(Arity::Many(vec!["derry-girls", "creek"])), 10))
@@ -463,7 +564,7 @@ mod fmt_tests {
     assert_eq!(
       format!(
         "{}",
-        Command::List::<&str, &str>(ListCommand::Rem("seinfeld", "kramer", 1))
+        Command::Lists::<&str, &str>(ListCommand::Rem("seinfeld", "kramer", 1))
       ),
       "*4\r\n$4\r\nLREM\r\n$8\r\nseinfeld\r\n$1\r\n1\r\n$6\r\nkramer\r\n"
     );
@@ -673,7 +774,7 @@ mod fmt_tests {
 
   #[test]
   fn test_ltrim() {
-    let cmd = Command::List::<_, &str>(ListCommand::Trim("episodes", 0, 10));
+    let cmd = Command::Lists::<_, &str>(ListCommand::Trim("episodes", 0, 10));
     assert_eq!(
       format!("{}", cmd),
       String::from("*4\r\n$5\r\nLTRIM\r\n$8\r\nepisodes\r\n$1\r\n0\r\n$2\r\n10\r\n")
@@ -682,7 +783,7 @@ mod fmt_tests {
 
   #[test]
   fn test_linsert_before() {
-    let cmd = Command::List::<_, &str>(ListCommand::Insert("episodes", Side::Left, "10", "9"));
+    let cmd = Command::Lists::<_, &str>(ListCommand::Insert("episodes", Side::Left, "10", "9"));
     assert_eq!(
       format!("{}", cmd),
       String::from("*5\r\n$7\r\nLINSERT\r\n$8\r\nepisodes\r\n$6\r\nBEFORE\r\n$2\r\n10\r\n$1\r\n9\r\n")
@@ -691,7 +792,7 @@ mod fmt_tests {
 
   #[test]
   fn test_linsert_after() {
-    let cmd = Command::List::<_, &str>(ListCommand::Insert("episodes", Side::Right, "10", "11"));
+    let cmd = Command::Lists::<_, &str>(ListCommand::Insert("episodes", Side::Right, "10", "11"));
     assert_eq!(
       format!("{}", cmd),
       String::from("*5\r\n$7\r\nLINSERT\r\n$8\r\nepisodes\r\n$5\r\nAFTER\r\n$2\r\n10\r\n$2\r\n11\r\n")
@@ -700,7 +801,7 @@ mod fmt_tests {
 
   #[test]
   fn test_lrem() {
-    let cmd = Command::List::<_, &str>(ListCommand::Rem("episodes", "10", 100));
+    let cmd = Command::Lists::<_, &str>(ListCommand::Rem("episodes", "10", 100));
     assert_eq!(
       format!("{}", cmd),
       String::from("*4\r\n$4\r\nLREM\r\n$8\r\nepisodes\r\n$3\r\n100\r\n$2\r\n10\r\n")
@@ -709,7 +810,7 @@ mod fmt_tests {
 
   #[test]
   fn test_lindex() {
-    let cmd = Command::List::<_, &str>(ListCommand::Index("episodes", 1));
+    let cmd = Command::Lists::<_, &str>(ListCommand::Index("episodes", 1));
     assert_eq!(
       format!("{}", cmd),
       String::from("*3\r\n$6\r\nLINDEX\r\n$8\r\nepisodes\r\n$1\r\n1\r\n")
@@ -718,7 +819,7 @@ mod fmt_tests {
 
   #[test]
   fn test_lset() {
-    let cmd = Command::List::<_, &str>(ListCommand::Set("episodes", 1, "pilot"));
+    let cmd = Command::Lists::<_, &str>(ListCommand::Set("episodes", 1, "pilot"));
     assert_eq!(
       format!("{}", cmd),
       String::from("*4\r\n$4\r\nLSET\r\n$8\r\nepisodes\r\n$1\r\n1\r\n$5\r\npilot\r\n")

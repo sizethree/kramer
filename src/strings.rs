@@ -3,11 +3,7 @@ use crate::modifiers::{format_bulk_string, Arity, Insertion};
 /// The `StringCommand` enum represents the most basic, key-value commands that
 /// redis offers; top-level keys with values being either strings or numbers.
 #[derive(Debug)]
-pub enum StringCommand<S, V>
-where
-  S: std::fmt::Display,
-  V: std::fmt::Display,
-{
+pub enum StringCommand<S, V> {
   /// Sets the value of a key.
   Set(Arity<(S, V)>, Option<std::time::Duration>, Insertion),
 

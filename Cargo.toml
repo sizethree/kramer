@@ -1,6 +1,6 @@
 [package]
 name = "kramer"
-version = "2.1.0"
+version = "3.0.0"
 authors = ["Danny Hadley <dadleyy@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -13,6 +13,11 @@ keywords = ["redis"]
 version = "^1.0"
 optional = true
 
+[dependencies.futures-io]
+version = "^0.3"
+optional = true
+
 [features]
 kramer-async = ["async-std"]
+kramer-async-read = ["futures-io", "kramer-async"]
 acl = []
