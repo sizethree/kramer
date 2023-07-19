@@ -3,11 +3,7 @@ use crate::modifiers::{format_bulk_string, Arity};
 /// The `SetCommand` is used for working with redis keys that are sets: unique collections
 /// of values.
 #[derive(Debug)]
-pub enum SetCommand<S, V>
-where
-  S: std::fmt::Display,
-  V: std::fmt::Display,
-{
+pub enum SetCommand<S, V> {
   /// Adds a member(s) to a set.
   Add(S, Arity<V>),
 

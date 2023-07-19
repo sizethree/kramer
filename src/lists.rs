@@ -2,11 +2,7 @@ use crate::modifiers::{format_bulk_string, Arity, Insertion, Side};
 
 /// Lists.
 #[derive(Debug)]
-pub enum ListCommand<S, V>
-where
-  S: std::fmt::Display,
-  V: std::fmt::Display,
-{
+pub enum ListCommand<S, V> {
   /// List length.
   Len(S),
 

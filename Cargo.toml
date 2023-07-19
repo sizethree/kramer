@@ -1,6 +1,6 @@
 [package]
 name = "kramer"
-version = "2.1.0"
+version = "3.0.0"
 authors = ["Danny Hadley <dadleyy@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -15,4 +15,5 @@ optional = true
 
 [features]
 kramer-async = ["async-std"]
+kramer-async-read = ["kramer-async"]
 acl = []
